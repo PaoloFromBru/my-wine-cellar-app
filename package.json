@@ -18,16 +18,6 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ],
-    "globals": {
-      "__app_id": "readonly",
-      "__initial_auth_token": "readonly"
-    }
-  },
   "browserslist": {
     "production": [
       ">0.2%",
