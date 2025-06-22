@@ -69,7 +69,7 @@ const UserIcon = ({className = "w-5 h-5"}) => (
 const LogoutIcon = ({className = "w-5 h-5"}) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-  </svg>
+    </svg>
 );
 
 const SparklesIcon = ({ className = "w-5 h-5" }) => (
@@ -398,6 +398,11 @@ ${wineListForPrompt}`;
     };
 
     const parseCsv = (csvText) => {
+        // Remove Byte Order Mark (BOM) if present
+        if (csvText.charCodeAt(0) === 0xFEFF) {
+            csvText = csvText.substring(1);
+        }
+
         const lines = csvText.split(/\r\n|\n/); 
         if (lines.length < 2) return { headers: [], data: [] }; 
 
@@ -428,7 +433,7 @@ ${wineListForPrompt}`;
             const values = parseLine(lines[i]);
             const rowObject = {};
             headers.forEach((header, index) => {
-                rowObject[header] = values[index] || ''; 
+                rowObject[header] = values[index] ? values[index].trim() : ''; // Also trim values
             });
             data.push(rowObject);
         }
@@ -1094,3 +1099,4 @@ const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoad
 
 
 export default App;
+
