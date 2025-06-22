@@ -406,22 +406,24 @@ ${wineListForPrompt}`;
         const lines = csvText.split(/\r\n|\n/); 
         if (lines.length < 2) return { headers: [], data: [] }; 
 
+        // Modified parseLine to handle semicolon delimiter
         const parseLine = (line) => {
             const result = [];
             let currentField = '';
             let inQuotes = false;
+            // Iterate through the line character by character
             for (let i = 0; i < line.length; i++) {
                 const char = line[i];
-                if (char === '"') {
+                if (char === '"') { // Handle quotes for fields containing delimiters
                     inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
+                } else if (char === ';' && !inQuotes) { // Use semicolon as delimiter
                     result.push(currentField.trim());
                     currentField = '';
                 } else {
                     currentField += char;
                 }
             }
-            result.push(currentField.trim()); 
+            result.push(currentField.trim()); // Add the last field
             return result;
         };
         
@@ -433,7 +435,7 @@ ${wineListForPrompt}`;
             const values = parseLine(lines[i]);
             const rowObject = {};
             headers.forEach((header, index) => {
-                rowObject[header] = values[index] ? values[index].trim() : ''; // Also trim values
+                rowObject[header] = values[index] ? values[index].trim() : ''; 
             });
             data.push(rowObject);
         }
@@ -1099,4 +1101,5 @@ const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoad
 
 
 export default App;
+
 
