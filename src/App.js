@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
-    signInAnonymously,
+    signInAnonymously, // Keeping import for completeness, though not directly called in default flow now
     signInWithCustomToken,
     onAuthStateChanged,
     signOut,
-    createUserWithEmailAndPassword, // Added for registration
-    signInWithEmailAndPassword      // Added for login
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword
 } from 'firebase/auth';
 import {
     getFirestore,
@@ -196,23 +196,12 @@ function App() {
                 if (firebaseUser) {
                     setUser(firebaseUser);
                     setUserId(firebaseUser.uid);
-                    setError(null); // Clear any previous auth errors
+                    setError(null); 
                 } else {
-                    // Only sign in anonymously if no user is present and it's not a custom token flow
-                    // In a public app, you might want to force login/register instead of anonymous fallback
-                    try {
-                        const currentToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                        if (currentToken) {
-                            await signInWithCustomToken(authInstance, currentToken);
-                        } else {
-                            await signInAnonymously(authInstance);
-                        }
-                    } catch (signInError) {
-                        console.error("Error during anonymous sign-in:", signInError);
-                        setError(`Authentication failed. Please try logging in or registering. Error: ${signInError.message}`);
-                        setUser(null);
-                        setUserId(null);
-                    }
+                    // Removed automatic signInAnonymously fallback
+                    // Now, if no user is authenticated, the app will show Login/Register buttons
+                    setUser(null);
+                    setUserId(null);
                 }
                 setIsAuthReady(true);
             });
@@ -614,7 +603,6 @@ ${wineListForPrompt}`;
                     {user ? (
                         <div className="flex items-center space-x-3">
                             <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center" title={`User ID: ${userId}`}>
-                                <UserIcon className="w-4 h-4 mr-1" /> 
                                 {user.isAnonymous ? `Guest (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)` : (user.email || `User (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)`)}
                             </span>
                             <button
@@ -648,14 +636,24 @@ ${wineListForPrompt}`;
             <main className="container mx-auto">
                 {!user && isAuthReady && !error && (
                      <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-lg shadow">
-                        <p className="text-lg mb-4">Authenticating and loading your cellar...</p>
-                         <svg className="animate-spin h-8 w-8 text-red-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                        <p className="text-lg mb-4">Please Login or Register to manage your wine cellar.</p>
+                        <div className="flex justify-center items-center space-x-3 mt-4">
+                            <button
+                                onClick={() => setShowLoginModal(true)}
+                                className="px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white text-lg font-semibold"
+                            >
+                                Login
+                            </button>
+                            <button
+                                onClick={() => setShowRegisterModal(true)}
+                                className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold"
+                            >
+                                Register
+                            </button>
+                        </div>
                     </div>
                 )}
-
+                {/* Conditionally render content only if user is logged in */}
                 {user && (
                     <>
                         {/* Action Bar: Search & Add Wine */}
@@ -845,7 +843,7 @@ ${wineListForPrompt}`;
     );
 }
 
-// --- Wine Item Component (Unchanged) ---
+// --- Wine Item Component ---
 const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
@@ -895,7 +893,7 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     );
 };
 
-// --- Wine Form Modal Component (Unchanged) ---
+// --- Wine Form Modal Component ---
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => { 
     const [formData, setFormData] = useState({
         name: '', 
@@ -1062,7 +1060,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     );
 };
 
-// --- Food Pairing Modal Component (Unchanged) ---
+// --- Food Pairing Modal Component ---
 const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetchPairing }) => {
     useEffect(() => {
         if (isOpen && wine && !suggestion && !isLoading) {
@@ -1118,7 +1116,7 @@ const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetc
     );
 };
 
-// --- Reverse Food Pairing Modal Component (Unchanged) ---
+// --- Reverse Food Pairing Modal Component ---
 const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Wine Suggestion for ${foodItem || 'Your Meal'}`}>
@@ -1153,7 +1151,7 @@ const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoad
     );
 };
 
-// --- Auth Modal Component (NEW) ---
+// --- Auth Modal Component ---
 const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -1277,5 +1275,3 @@ const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError 
 };
 
 export default App;
-
-
