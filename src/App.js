@@ -5,7 +5,9 @@ import {
     signInAnonymously,
     signInWithCustomToken,
     onAuthStateChanged,
-    signOut
+    signOut,
+    createUserWithEmailAndPassword, // Added for registration
+    signInWithEmailAndPassword      // Added for login
 } from 'firebase/auth';
 import {
     getFirestore,
@@ -170,6 +172,10 @@ function App() {
     const [isImportingCsv, setIsImportingCsv] = useState(false);
     const [csvImportStatus, setCsvImportStatus] = useState({ message: '', type: '', errors: [] });
 
+    // New state for auth modals
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [showRegisterModal, setShowRegisterModal] = useState(false);
+
 
     useEffect(() => {
         if (Object.keys(firebaseConfig).length === 0) {
@@ -190,7 +196,10 @@ function App() {
                 if (firebaseUser) {
                     setUser(firebaseUser);
                     setUserId(firebaseUser.uid);
+                    setError(null); // Clear any previous auth errors
                 } else {
+                    // Only sign in anonymously if no user is present and it's not a custom token flow
+                    // In a public app, you might want to force login/register instead of anonymous fallback
                     try {
                         const currentToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                         if (currentToken) {
@@ -199,14 +208,17 @@ function App() {
                             await signInAnonymously(authInstance);
                         }
                     } catch (signInError) {
-                        setError(`Sign-in failed: ${signInError.message}`);
-                        setUser(null); setUserId(null);
+                        console.error("Error during anonymous sign-in:", signInError);
+                        setError(`Authentication failed. Please try logging in or registering. Error: ${signInError.message}`);
+                        setUser(null);
+                        setUserId(null);
                     }
                 }
                 setIsAuthReady(true);
             });
             return () => unsubscribe();
         } catch (e) {
+            console.error("Error initializing Firebase:", e);
             setError("Could not initialize Firebase. Some features may not work.");
             setIsAuthReady(true); 
         }
@@ -233,6 +245,7 @@ function App() {
             setIsLoadingWines(false);
             setError(null); 
         }, (err) => {
+            console.error("Error fetching wines:", err);
             setError(`Failed to fetch wines: ${err.message}. Check Firestore rules & connectivity.`);
             setWines([]); 
             setIsLoadingWines(false);
@@ -248,7 +261,7 @@ function App() {
                 ...wineData, year: wineData.year ? parseInt(wineData.year, 10) : null, addedAt: Timestamp.now(),
             });
             setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null); 
-        } catch (err) { setError(`Failed to add wine: ${err.message}`); }
+        } catch (err) { console.error("Error adding wine:", err); setError(`Failed to add wine: ${err.message}`); }
     };
 
     const handleUpdateWine = async (wineIdToUpdate, wineData) => { 
@@ -257,7 +270,7 @@ function App() {
             const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineIdToUpdate);
             await updateDoc(wineDocRef, { ...wineData, year: wineData.year ? parseInt(wineData.year, 10) : null });
             setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null);
-        } catch (err) { setError(`Failed to update wine: ${err.message}`); }
+        } catch (err) { console.error("Error updating wine:", err); setError(`Failed to update wine: ${err.message}`); }
     };
 
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -277,7 +290,7 @@ function App() {
             const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineToDelete.id);
             await deleteDoc(wineDocRef);
             setError(null); setShowDeleteConfirmModal(false); setWineToDelete(null);
-        } catch (err) { setError(`Failed to delete wine: ${err.message}`); setShowDeleteConfirmModal(false); }
+        } catch (err) { console.error("Error deleting wine:", err); setError(`Failed to delete wine: ${err.message}`); setShowDeleteConfirmModal(false); }
     };
 
     const handleOpenWineForm = (wine = null) => { setCurrentWineToEdit(wine); setShowWineFormModal(true); };
@@ -319,6 +332,7 @@ function App() {
                 setFoodPairingSuggestion("Could not retrieve a pairing suggestion at this time (unexpected AI response).");
             }
         } catch (err) {
+            console.error("Error fetching food pairing:", err);
             setError(prevError => prevError || `Food pairing suggestion failed: ${err.message}`);
             setFoodPairingSuggestion(`Failed to get suggestion: ${err.message}`);
         } finally {
@@ -377,6 +391,7 @@ ${wineListForPrompt}`;
                 setReversePairingResult("Could not get a wine suggestion at this time (unexpected AI response).");
             }
         } catch (err) {
+            console.error("Error finding wine for food:", err);
             setError(prevError => prevError || `Finding wine for food failed: ${err.message}`);
             setReversePairingResult(`Failed to get suggestion: ${err.message}`);
         } finally {
@@ -389,7 +404,7 @@ ${wineListForPrompt}`;
     const handleLogout = async () => {
         if (auth) {
             try { await signOut(auth); setUser(null); setUserId(null); setWines([]); } 
-            catch (e) { setError("Logout failed. Please try again."); }
+            catch (e) { console.error("Logout failed: ", e); setError("Logout failed. Please try again."); }
         }
     };
     
@@ -530,6 +545,7 @@ ${wineListForPrompt}`;
                     setCsvImportStatus({ message: successMsg, type: 'success', errors: importErrors });
 
                 } catch (dbError) {
+                    console.error("Database error during import:", dbError);
                     setCsvImportStatus({ message: `Database error during import: ${dbError.message}`, type: 'error', errors: importErrors });
                 }
             } else {
@@ -547,6 +563,7 @@ ${wineListForPrompt}`;
             }
         };
         reader.onerror = () => {
+            console.error("Error reading CSV file:", reader.error);
             setCsvImportStatus({ message: 'Failed to read the CSV file.', type: 'error', errors: [] });
             setIsImportingCsv(false);
         };
@@ -594,7 +611,7 @@ ${wineListForPrompt}`;
                         <WineBottleIcon className="w-10 h-10 text-red-700 dark:text-red-500" />
                         <h1 className="text-3xl font-bold text-slate-700 dark:text-slate-100">My Wine Cellar</h1>
                     </div>
-                    {user && (
+                    {user ? (
                         <div className="flex items-center space-x-3">
                             <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center" title={`User ID: ${userId}`}>
                                 <UserIcon className="w-4 h-4 mr-1" /> 
@@ -606,6 +623,21 @@ ${wineListForPrompt}`;
                             >
                                 <LogoutIcon className="w-4 h-4" />
                                 <span>Logout</span>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center space-x-3">
+                            <button
+                                onClick={() => setShowLoginModal(true)}
+                                className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold"
+                            >
+                                Login
+                            </button>
+                            <button
+                                onClick={() => setShowRegisterModal(true)}
+                                className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                            >
+                                Register
                             </button>
                         </div>
                     )}
@@ -785,6 +817,24 @@ ${wineListForPrompt}`;
                         </button>
                     </div>
                 </Modal>
+
+                {/* New Auth Modals */}
+                <AuthModal
+                    isOpen={showLoginModal}
+                    onClose={() => setShowLoginModal(false)}
+                    isRegister={false}
+                    auth={auth} // Pass the auth instance
+                    onAuthSuccess={() => setShowLoginModal(false)}
+                    setError={setError}
+                />
+                <AuthModal
+                    isOpen={showRegisterModal}
+                    onClose={() => setShowRegisterModal(false)}
+                    isRegister={true}
+                    auth={auth} // Pass the auth instance
+                    onAuthSuccess={() => setShowRegisterModal(false)}
+                    setError={setError}
+                />
             </main>
             <footer className="text-center mt-12 py-4 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -795,8 +845,7 @@ ${wineListForPrompt}`;
     );
 }
 
-// --- Other Components (WineItem, WineFormModal, FoodPairingModal, ReverseFoodPairingModal) ---
-
+// --- Wine Item Component (Unchanged) ---
 const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
@@ -846,6 +895,7 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     );
 };
 
+// --- Wine Form Modal Component (Unchanged) ---
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => { 
     const [formData, setFormData] = useState({
         name: '', 
@@ -1012,6 +1062,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     );
 };
 
+// --- Food Pairing Modal Component (Unchanged) ---
 const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetchPairing }) => {
     useEffect(() => {
         if (isOpen && wine && !suggestion && !isLoading) {
@@ -1067,6 +1118,7 @@ const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetc
     );
 };
 
+// --- Reverse Food Pairing Modal Component (Unchanged) ---
 const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Wine Suggestion for ${foodItem || 'Your Meal'}`}>
@@ -1101,6 +1153,128 @@ const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoad
     );
 };
 
+// --- Auth Modal Component (NEW) ---
+const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [authError, setAuthError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) { // Reset form when modal closes
+            setEmail('');
+            setPassword('');
+            setAuthError('');
+        }
+    }, [isOpen]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        setIsLoading(true);
+
+        if (!email || !password) {
+            setAuthError('Email and password are required.');
+            setIsLoading(false);
+            return;
+        }
+        if (password.length < 6) {
+            setAuthError('Password should be at least 6 characters.');
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            if (isRegister) {
+                await createUserWithEmailAndPassword(auth, email, password);
+                onAuthSuccess();
+                setError(null); // Clear app-level error on success
+            } else {
+                await signInWithEmailAndPassword(auth, email, password);
+                onAuthSuccess();
+                setError(null); // Clear app-level error on success
+            }
+        } catch (error) {
+            console.error("Auth error:", error);
+            let errorMessage = "Authentication failed. Please try again.";
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    errorMessage = 'This email is already registered. Try logging in.';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Invalid email address.';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage = 'Password is too weak.';
+                    break;
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                    errorMessage = 'Invalid email or password.';
+                    break;
+                default:
+                    errorMessage = `Authentication error: ${error.message}`;
+            }
+            setAuthError(errorMessage);
+            setError(errorMessage); // Propagate to app-level general error display
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={isRegister ? 'Register' : 'Login'}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {authError && <AlertMessage message={authError} type="error" onDismiss={() => setAuthError('')} />}
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+                    <input
+                        type="email"
+                        id="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                        required
+                    />
+                </div>
+                <div className="flex justify-end space-x-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? (
+                            <svg className="animate-spin h-5 w-5 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : (
+                            isRegister ? 'Register' : 'Login'
+                        )}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
 
 export default App;
 
