@@ -294,7 +294,8 @@ function App() {
 
         let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
         const payload = { contents: chatHistory };
-        const apiKey = ""; 
+        // Use environment variable for API Key
+        const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         try {
@@ -351,7 +352,8 @@ ${wineListForPrompt}`;
         
         let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
         const payload = { contents: chatHistory };
-        const apiKey = ""; 
+        // Use environment variable for API Key
+        const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         try {
@@ -435,7 +437,7 @@ ${wineListForPrompt}`;
             const values = parseLine(lines[i]);
             const rowObject = {};
             headers.forEach((header, index) => {
-                rowObject[header] = values[index] ? values[index].trim() : ''; 
+                rowObject[header] = values[index] ? values[index].trim() : ''; // Also trim values
             });
             data.push(rowObject);
         }
