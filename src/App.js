@@ -601,21 +601,25 @@ ${wineListForPrompt}`;
             const endYear = wine.drinkingWindowEndYear;
 
             if (startYear && endYear) {
-                // Case 1: Wine is currently within its drinking window
-                if (currentYear >= startYear && currentYear <= endYear) {
-                    // Check if it's nearing the end (e.g., within 2 years of endYear, or slightly past endYear)
-                    if (currentYear >= endYear - 2) { // 2 years before end or past end
-                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon' });
-                    }
-                }
-                // Case 2: Wine is past its drinking window, but only recently (e.g., up to 1 year past)
-                else if (currentYear > endYear && currentYear <= endYear + 1) { // 1 year past end
+                // Rule 1: Wine is past its drinking window, but not too far (e.g., up to 1 year past)
+                if (currentYear > endYear && currentYear <= endYear + 1) { 
                     winesToConsider.push({ ...wine, drinkingStatus: 'Drink Now (Past Window)' });
+                }
+                // Rule 2: Wine is currently in its drinking window and nearing the end (e.g., within 2 years of endYear)
+                else if (currentYear >= startYear && currentYear <= endYear && currentYear >= endYear - 2) {
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon' });
                 }
             }
         });
-        // Sort by drinking window end year for better overview
-        return winesToConsider.sort((a, b) => (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity));
+        
+        // Sort: First by drinking status (Past Window first), then by End Year (earliest first)
+        return winesToConsider.sort((a, b) => {
+            const statusOrder = { 'Drink Now (Past Window)': 1, 'Drink Soon': 2 };
+            const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
+            if (statusCompare !== 0) return statusCompare;
+            
+            return (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity);
+        });
     }, [wines]);
 
     const winesApproachingEnd = useMemo(() => getWinesApproachingEndOfWindow(), [wines, getWinesApproachingEndOfWindow]);
@@ -819,10 +823,10 @@ ${wineListForPrompt}`;
                             <div className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg shadow border border-yellow-200 dark:border-yellow-700">
                                 <h2 className="text-xl font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center space-x-2">
                                     <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-                                    <span>Drink Soon! Wines Approaching End of Window</span>
+                                    <span>Drink Soon! Wines Requiring Attention</span>
                                 </h2>
                                 <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
-                                    These wines are either currently in their final years of their drinking window or have recently passed it.
+                                    These wines are either past their ideal drinking window or are approaching its end.
                                 </p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {winesApproachingEnd.map(wine => (
@@ -831,7 +835,7 @@ ${wineListForPrompt}`;
                                             <div>
                                                 <p className="font-semibold text-yellow-800 dark:text-yellow-200">{wine.name || wine.producer}</p>
                                                 <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                                                    {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear}-{wine.drinkingWindowEndYear}
+                                                    {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear || 'N/A'} - {wine.drinkingWindowEndYear || 'N/A'}
                                                 </p>
                                                 <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
                                                     Status: **{wine.drinkingStatus}**
@@ -847,14 +851,6 @@ ${wineListForPrompt}`;
                         {/* Wine Collection Display */}
                          {isLoadingWines && user && <p className="text-center py-4">Loading your wine collection...</p>}
                         
-                        {!isLoadingWines && wines.length === 0 && !searchTerm && user && (
-                            <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
-                                <WineBottleIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
-                                <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">Your cellar is empty!</h3>
-                                <p className="text-slate-500 dark:text-slate-400 mb-6">Start by adding your first bottle or importing a CSV file.</p>
-                            </div>
-                        )}
-
                         {!isLoadingWines && filteredWines.length === 0 && searchTerm && user && (
                             <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
                                  <SearchIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
@@ -956,8 +952,10 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
                 <p><strong className="text-slate-600 dark:text-slate-300">Color:</strong> <span className="text-slate-700 dark:text-slate-200 capitalize">{wine.color}</span></p>
                 <p><strong className="text-slate-600 dark:text-slate-300">Location:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.location}</span></p>
                 {/* Display Drinking Window if available */}
-                {(wine.drinkingWindowStartYear && wine.drinkingWindowEndYear) && (
+                {(wine.drinkingWindowStartYear && wine.drinkingWindowEndYear) ? (
                     <p><strong className="text-slate-600 dark:text-slate-300">Drink Window:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.drinkingWindowStartYear} - {wine.drinkingWindowEndYear}</span></p>
+                ) : (
+                    <p className="text-sm text-slate-400 italic">No drinking window set</p>
                 )}
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
@@ -1037,8 +1035,8 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         }
 
         // Validate drinking window years
-        const startYear = parseInt(formData.drinkingWindowStartYear, 10);
-        const endYear = parseInt(formData.drinkingWindowEndYear, 10);
+        const startYear = formData.drinkingWindowStartYear ? parseInt(formData.drinkingWindowStartYear, 10) : null;
+        const endYear = formData.drinkingWindowEndYear ? parseInt(formData.drinkingWindowEndYear, 10) : null;
 
         if (formData.drinkingWindowStartYear && (isNaN(startYear) || startYear < 1000 || startYear > new Date().getFullYear() + 50)) {
             setFormError('Please enter a valid Drinking Window Start Year.');
@@ -1422,4 +1420,3 @@ const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError 
 };
 
 export default App;
-
