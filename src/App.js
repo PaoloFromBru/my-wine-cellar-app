@@ -601,21 +601,20 @@ ${wineListForPrompt}`;
             const endYear = wine.drinkingWindowEndYear;
 
             if (startYear && endYear) {
-                // Rule: Only include wines whose window ENDS in the current year or up to 1 year in the past.
-                // This means: (currentYear === endYear) OR (currentYear === endYear + 1)
-                if (currentYear === endYear || currentYear === endYear + 1) {
-                    if (currentYear > endYear) {
-                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Now (Past Window)' });
-                    } else { // currentYear === endYear
-                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
-                    }
+                // Rule 1: Wine is past its drinking window (endYear < currentYear)
+                if (endYear < currentYear) { 
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Window Closed' });
+                }
+                // Rule 2: Wine's drinking window ends THIS YEAR (endYear === currentYear)
+                else if (endYear === currentYear) { 
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
                 }
             }
         });
         
-        // Sort: First by drinking status (Past Window first), then by End Year (earliest first)
+        // Sort: First by drinking status (Closed first, then This Year), then by End Year (earliest first)
         return winesToConsider.sort((a, b) => {
-            const statusOrder = { 'Drink Now (Past Window)': 1, 'Drink Soon (This Year)': 2 };
+            const statusOrder = { 'Drink Window Closed': 1, 'Drink Soon (This Year)': 2 };
             const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
             if (statusCompare !== 0) return statusCompare;
             
@@ -827,7 +826,7 @@ ${wineListForPrompt}`;
                                     <span>Drink Soon! Wines Requiring Attention</span>
                                 </h2>
                                 <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
-                                    These wines are either past their ideal drinking window or are approaching its end.
+                                    These wines are either past their ideal drinking window or their window ends this year.
                                 </p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {winesApproachingEnd.map(wine => (
