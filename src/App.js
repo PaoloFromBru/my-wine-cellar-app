@@ -86,6 +86,12 @@ const UploadIcon = ({ className="w-5 h-5" }) => (
     </svg>
 );
 
+const ClockIcon = ({className="w-5 h-5"}) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
+
 
 // --- Firebase Config ---
 // Your web app's Firebase configuration
@@ -247,7 +253,11 @@ function App() {
         try {
             const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
             await addDoc(collection(db, winesCollectionPath), {
-                ...wineData, year: wineData.year ? parseInt(wineData.year, 10) : null, addedAt: Timestamp.now(),
+                ...wineData, 
+                year: wineData.year ? parseInt(wineData.year, 10) : null, 
+                drinkingWindowStartYear: wineData.drinkingWindowStartYear ? parseInt(wineData.drinkingWindowStartYear, 10) : null,
+                drinkingWindowEndYear: wineData.drinkingWindowEndYear ? parseInt(wineData.drinkingWindowEndYear, 10) : null,
+                addedAt: Timestamp.now(),
             });
             setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null); 
         } catch (err) { console.error("Error adding wine:", err); setError(`Failed to add wine: ${err.message}`); }
@@ -257,7 +267,12 @@ function App() {
         if (!db || !userId) { setError("Database not ready or user not logged in."); return; }
         try {
             const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineIdToUpdate);
-            await updateDoc(wineDocRef, { ...wineData, year: wineData.year ? parseInt(wineData.year, 10) : null });
+            await updateDoc(wineDocRef, { 
+                ...wineData, 
+                year: wineData.year ? parseInt(wineData.year, 10) : null,
+                drinkingWindowStartYear: wineData.drinkingWindowStartYear ? parseInt(wineData.drinkingWindowStartYear, 10) : null,
+                drinkingWindowEndYear: wineData.drinkingWindowEndYear ? parseInt(wineData.drinkingWindowEndYear, 10) : null,
+            });
             setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null);
         } catch (err) { console.error("Error updating wine:", err); setError(`Failed to update wine: ${err.message}`); }
     };
@@ -467,8 +482,8 @@ ${wineListForPrompt}`;
             const csvText = event.target.result;
             const { headers, data: parsedData } = parseCsv(csvText);
             
-            const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location'];
-            const requiredHeaders = ['producer', 'year', 'region', 'color', 'location']; // Name is optional
+            const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location', 'drinkingwindowstartyear', 'drinkingwindowendyear']; // Updated headers for CSV
+            const requiredHeaders = ['producer', 'year', 'region', 'color', 'location']; // Still required for each entry
             const missingHeaders = requiredHeaders.filter(eh => !headers.includes(eh));
             
             if (missingHeaders.length > 0) {
@@ -494,7 +509,9 @@ ${wineListForPrompt}`;
                     year: row.year ? parseInt(row.year, 10) : null,
                     region: row.region || '',
                     color: (row.color || 'other').toLowerCase(),
-                    location: row.location || ''
+                    location: row.location || '',
+                    drinkingWindowStartYear: row.drinkingwindowstartyear ? parseInt(row.drinkingwindowstartyear, 10) : null, // New field
+                    drinkingWindowEndYear: row.drinkingwindowendyear ? parseInt(row.drinkingwindowendyear, 10) : null,     // New field
                 };
 
                 if (!wineData.producer || !wineData.region || !wineData.color || !wineData.location) {
@@ -505,6 +522,20 @@ ${wineListForPrompt}`;
                     importErrors.push(`Row ${i + 2}: Invalid year "${row.year}". Skipped.`);
                     continue;
                 }
+                // Validate drinking window years if present
+                if (wineData.drinkingWindowStartYear && isNaN(wineData.drinkingWindowStartYear)) {
+                    importErrors.push(`Row ${i + 2}: Invalid Drinking Window Start Year "${row.drinkingwindowstartyear}". Skipped.`);
+                    continue;
+                }
+                if (wineData.drinkingWindowEndYear && isNaN(wineData.drinkingWindowEndYear)) {
+                    importErrors.push(`Row ${i + 2}: Invalid Drinking Window End Year "${row.drinkingwindowendyear}". Skipped.`);
+                    continue;
+                }
+                if (wineData.drinkingWindowStartYear && wineData.drinkingWindowEndYear && wineData.drinkingWindowStartYear > wineData.drinkingWindowEndYear) {
+                    importErrors.push(`Row ${i + 2}: Drinking Window Start Year (${wineData.drinkingWindowStartYear}) cannot be after End Year (${wineData.drinkingWindowEndYear}). Skipped.`);
+                    continue;
+                }
+
 
                 const trimmedLocation = wineData.location.trim().toLowerCase();
                 if (currentCellarLocations.includes(trimmedLocation) || locationsInCsv.has(trimmedLocation)) {
@@ -561,6 +592,35 @@ ${wineListForPrompt}`;
 
     // --- End CSV Import ---
 
+    const getWinesApproachingEndOfWindow = useCallback(() => {
+        const currentYear = new Date().getFullYear();
+        const winesToConsider = [];
+
+        wines.forEach(wine => {
+            const startYear = wine.drinkingWindowStartYear;
+            const endYear = wine.drinkingWindowEndYear;
+
+            if (startYear && endYear) {
+                // Case 1: Wine is currently within its drinking window
+                if (currentYear >= startYear && currentYear <= endYear) {
+                    // Check if it's nearing the end (e.g., within 2 years of endYear, or slightly past endYear)
+                    if (currentYear >= endYear - 2) { // 2 years before end or past end
+                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon' });
+                    }
+                }
+                // Case 2: Wine is past its drinking window, but only recently (e.g., up to 1 year past)
+                else if (currentYear > endYear && currentYear <= endYear + 1) { // 1 year past end
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Now (Past Window)' });
+                }
+            }
+        });
+        // Sort by drinking window end year for better overview
+        return winesToConsider.sort((a, b) => (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity));
+    }, [wines]);
+
+    const winesApproachingEnd = useMemo(() => getWinesApproachingEndOfWindow(), [wines, getWinesApproachingEndOfWindow]);
+
+
     const filteredWines = useMemo(() => {
         return wines.filter(wine => {
             const searchTermLower = searchTerm.toLowerCase();
@@ -603,6 +663,7 @@ ${wineListForPrompt}`;
                     {user ? (
                         <div className="flex items-center space-x-3">
                             <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center" title={`User ID: ${userId}`}>
+                                <UserIcon className="w-4 h-4 mr-1" />
                                 {user.isAnonymous ? `Guest (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)` : (user.email || `User (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)`)}
                             </span>
                             <button
@@ -687,10 +748,10 @@ ${wineListForPrompt}`;
                         <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
                             <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Import Wines from CSV</h2>
                             <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                                Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>.
+                                Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>, <code>drinkingwindowstartyear</code>, <code>drinkingwindowendyear</code>.
                             </p>
                             <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-                                Ensure locations are unique. Commas within fields should be enclosed in double quotes (e.g., "Napa Valley, California").
+                                Ensure locations are unique. Semicolons within fields should be enclosed in double quotes (e.g., "Napa Valley; California").
                             </p>
                             <div className="flex flex-col sm:flex-row items-end gap-3">
                                 <div className="flex-grow w-full">
@@ -752,6 +813,35 @@ ${wineListForPrompt}`;
                                 <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">Add some wines to your cellar to use this feature.</p>
                             )}
                         </div>
+
+                        {/* Wines Approaching End of Drinking Window */}
+                        {winesApproachingEnd.length > 0 && (
+                            <div className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg shadow border border-yellow-200 dark:border-yellow-700">
+                                <h2 className="text-xl font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center space-x-2">
+                                    <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                                    <span>Drink Soon! Wines Approaching End of Window</span>
+                                </h2>
+                                <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
+                                    These wines are either currently in their final years of their drinking window or have recently passed it.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {winesApproachingEnd.map(wine => (
+                                        <div key={wine.id} className="bg-yellow-100 dark:bg-yellow-900/40 p-4 rounded-lg flex items-center space-x-3">
+                                            <WineBottleIcon className="w-8 h-8 text-yellow-700 dark:text-yellow-500 flex-shrink-0" />
+                                            <div>
+                                                <p className="font-semibold text-yellow-800 dark:text-yellow-200">{wine.name || wine.producer}</p>
+                                                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                                    {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear}-{wine.drinkingWindowEndYear}
+                                                </p>
+                                                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                                    Status: **{wine.drinkingStatus}**
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
 
                         {/* Wine Collection Display */}
@@ -865,6 +955,10 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
                 <p><strong className="text-slate-600 dark:text-slate-300">Region:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.region}</span></p>
                 <p><strong className="text-slate-600 dark:text-slate-300">Color:</strong> <span className="text-slate-700 dark:text-slate-200 capitalize">{wine.color}</span></p>
                 <p><strong className="text-slate-600 dark:text-slate-300">Location:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.location}</span></p>
+                {/* Display Drinking Window if available */}
+                {(wine.drinkingWindowStartYear && wine.drinkingWindowEndYear) && (
+                    <p><strong className="text-slate-600 dark:text-slate-300">Drink Window:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.drinkingWindowStartYear} - {wine.drinkingWindowEndYear}</span></p>
+                )}
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
                 <button
@@ -901,7 +995,9 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         year: '',
         region: '',
         color: 'red', 
-        location: ''
+        location: '',
+        drinkingWindowStartYear: '', // New field
+        drinkingWindowEndYear: ''    // New field
     });
     const [formError, setFormError] = useState('');
 
@@ -913,10 +1009,12 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                 year: wine.year || '',
                 region: wine.region || '',
                 color: wine.color || 'red',
-                location: wine.location || ''
+                location: wine.location || '',
+                drinkingWindowStartYear: wine.drinkingWindowStartYear || '',
+                drinkingWindowEndYear: wine.drinkingWindowEndYear || ''
             });
         } else {
-            setFormData({ name: '', producer: '', year: '', region: '', color: 'red', location: '' });
+            setFormData({ name: '', producer: '', year: '', region: '', color: 'red', location: '', drinkingWindowStartYear: '', drinkingWindowEndYear: '' });
         }
         setFormError(''); 
     }, [wine, isOpen]); 
@@ -934,9 +1032,27 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             return;
         }
         if (formData.year && (isNaN(parseInt(formData.year)) || parseInt(formData.year) < 1000 || parseInt(formData.year) > new Date().getFullYear() + 10 )) { 
-            setFormError('Please enter a valid year (e.g., 2020).');
+            setFormError('Please enter a valid Year (e.g., 2020).');
             return;
         }
+
+        // Validate drinking window years
+        const startYear = parseInt(formData.drinkingWindowStartYear, 10);
+        const endYear = parseInt(formData.drinkingWindowEndYear, 10);
+
+        if (formData.drinkingWindowStartYear && (isNaN(startYear) || startYear < 1000 || startYear > new Date().getFullYear() + 50)) {
+            setFormError('Please enter a valid Drinking Window Start Year.');
+            return;
+        }
+        if (formData.drinkingWindowEndYear && (isNaN(endYear) || endYear < 1000 || endYear > new Date().getFullYear() + 100)) {
+            setFormError('Please enter a valid Drinking Window End Year.');
+            return;
+        }
+        if (startYear && endYear && startYear > endYear) {
+            setFormError('Drinking Window Start Year cannot be after End Year.');
+            return;
+        }
+
 
         if (formData.location && allWines) {
             const currentLocation = formData.location.trim().toLowerCase();
@@ -1040,6 +1156,37 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
                     />
                 </div>
+
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
+                    <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">Drinking Window (Optional)</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="drinkingWindowStartYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Year</label>
+                            <input
+                                type="number"
+                                name="drinkingWindowStartYear"
+                                id="drinkingWindowStartYear"
+                                value={formData.drinkingWindowStartYear}
+                                onChange={handleChange}
+                                placeholder="e.g., 2023"
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="drinkingWindowEndYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">End Year</label>
+                            <input
+                                type="number"
+                                name="drinkingWindowEndYear"
+                                id="drinkingWindowEndYear"
+                                value={formData.drinkingWindowEndYear}
+                                onChange={handleChange}
+                                placeholder="e.g., 2030"
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 <div className="flex justify-end space-x-3 pt-2">
                     <button
                         type="button"
@@ -1060,7 +1207,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     );
 };
 
-// --- Food Pairing Modal Component ---
+// --- Food Pairing Modal Component (Unchanged) ---
 const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetchPairing }) => {
     useEffect(() => {
         if (isOpen && wine && !suggestion && !isLoading) {
@@ -1116,7 +1263,7 @@ const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetc
     );
 };
 
-// --- Reverse Food Pairing Modal Component ---
+// --- Reverse Food Pairing Modal Component (Unchanged) ---
 const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Wine Suggestion for ${foodItem || 'Your Meal'}`}>
@@ -1275,3 +1422,4 @@ const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError 
 };
 
 export default App;
+
