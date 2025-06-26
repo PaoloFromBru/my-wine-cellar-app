@@ -601,20 +601,21 @@ ${wineListForPrompt}`;
             const endYear = wine.drinkingWindowEndYear;
 
             if (startYear && endYear) {
-                // Rule 1: Wine is past its drinking window, but not too far (e.g., up to 1 year past)
-                if (currentYear > endYear && currentYear <= endYear + 1) { 
-                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Now (Past Window)' });
-                }
-                // Rule 2: Wine is currently in its drinking window and nearing the end (e.g., within 2 years of endYear)
-                else if (currentYear >= startYear && currentYear <= endYear && currentYear >= endYear - 2) {
-                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon' });
+                // Rule: Only include wines whose window ENDS in the current year or up to 1 year in the past.
+                // This means: (currentYear === endYear) OR (currentYear === endYear + 1)
+                if (currentYear === endYear || currentYear === endYear + 1) {
+                    if (currentYear > endYear) {
+                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Now (Past Window)' });
+                    } else { // currentYear === endYear
+                        winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
+                    }
                 }
             }
         });
         
         // Sort: First by drinking status (Past Window first), then by End Year (earliest first)
         return winesToConsider.sort((a, b) => {
-            const statusOrder = { 'Drink Now (Past Window)': 1, 'Drink Soon': 2 };
+            const statusOrder = { 'Drink Now (Past Window)': 1, 'Drink Soon (This Year)': 2 };
             const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
             if (statusCompare !== 0) return statusCompare;
             
