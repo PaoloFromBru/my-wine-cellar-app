@@ -189,7 +189,7 @@ function App() {
     const [showRegisterModal, setShowRegisterModal] = useState(false);
 
     // New state for navigation view
-    const [currentView, setCurrentView] = useState('myCellar'); // 'myCellar', 'drinkSoon', 'foodPairing'
+    const [currentView, setCurrentView] = useState('myCellar'); // 'myCellar', 'drinkSoon', 'foodPairing', 'importWines'
 
 
     useEffect(() => {
@@ -759,6 +759,15 @@ ${wineListForPrompt}`;
                                 <FoodIcon className="w-5 h-5" />
                                 <span>Food Pairing</span>
                             </button>
+                            <button
+                                onClick={() => setCurrentView('importWines')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'importWines' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <UploadIcon className="w-5 h-5" />
+                                <span>Import Wines</span>
+                            </button>
                         </nav>
 
                         {/* Conditional Rendering of Views */}
@@ -791,47 +800,6 @@ ${wineListForPrompt}`;
                                     </div>
                                 </div>
                                 
-                                {/* CSV Import Section */}
-                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
-                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Import Wines from CSV</h2>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                                        Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>, <code>drinkingwindowstartyear</code>, <code>drinkingwindowendyear</code>.
-                                    </p>
-                                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-                                        Ensure locations are unique. Semicolons within fields should be enclosed in double quotes (e.g., "Napa Valley; California").
-                                    </p>
-                                    <div className="flex flex-col sm:flex-row items-end gap-3">
-                                        <div className="flex-grow w-full">
-                                            <label htmlFor="csvFileInput" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Select CSV File</label>
-                                            <input
-                                                id="csvFileInput"
-                                                type="file"
-                                                accept=".csv"
-                                                onChange={handleCsvFileChange}
-                                                className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-800 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-700"
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={handleImportCsv}
-                                            disabled={!csvFile || isImportingCsv}
-                                            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                                        >
-                                            <UploadIcon />
-                                            <span>{isImportingCsv ? 'Importing...' : 'Import CSV'}</span>
-                                        </button>
-                                    </div>
-                                    {csvImportStatus.message && (
-                                        <div className="mt-4">
-                                            <AlertMessage 
-                                                message={csvImportStatus.message + (csvImportStatus.errors.length > 0 ? "<br/><strong>Errors:</strong><ul>" + csvImportStatus.errors.map(e => `<li>- ${e}</li>`).join('') + "</ul>" : "")} 
-                                                type={csvImportStatus.type} 
-                                                onDismiss={() => setCsvImportStatus({ message: '', type: '', errors: [] })}
-                                                isHtml={csvImportStatus.errors.length > 0}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-
                                 {/* Wine Collection Display */}
                                 {isLoadingWines && user && <p className="text-center py-4">Loading your wine collection...</p>}
                                 
@@ -945,7 +913,7 @@ ${wineListForPrompt}`;
                                 <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
                                     <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Individual Wine Pairing</h2>
                                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                                        You can also find food pairings for specific wines from your main cellar list below.
+                                        You can also find food pairings for specific wines from your main cellar list.
                                     </p>
                                     {/* Optionally list some wines here or direct user to "My Cellar" view */}
                                     <button
@@ -955,6 +923,51 @@ ${wineListForPrompt}`;
                                         <WineBottleIcon className="w-4 h-4" />
                                         <span>Go to My Cellar to pick a wine</span>
                                     </button>
+                                </div>
+                            </>
+                        )}
+
+                        {currentView === 'importWines' && (
+                            <>
+                                {/* CSV Import Section */}
+                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Import Wines from CSV</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                                        Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>, <code>drinkingwindowstartyear</code>, <code>drinkingwindowendyear</code>.
+                                    </p>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                                        Ensure locations are unique. Semicolons within fields should be enclosed in double quotes (e.g., "Napa Valley; California").
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row items-end gap-3">
+                                        <div className="flex-grow w-full">
+                                            <label htmlFor="csvFileInput" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Select CSV File</label>
+                                            <input
+                                                id="csvFileInput"
+                                                type="file"
+                                                accept=".csv"
+                                                onChange={handleCsvFileChange}
+                                                className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-800 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-700"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleImportCsv}
+                                            disabled={!csvFile || isImportingCsv}
+                                            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        >
+                                            <UploadIcon />
+                                            <span>{isImportingCsv ? 'Importing...' : 'Import CSV'}</span>
+                                        </button>
+                                    </div>
+                                    {csvImportStatus.message && (
+                                        <div className="mt-4">
+                                            <AlertMessage 
+                                                message={csvImportStatus.message + (csvImportStatus.errors.length > 0 ? "<br/><strong>Errors:</strong><ul>" + csvImportStatus.errors.map(e => `<li>- ${e}</li>`).join('') + "</ul>" : "")} 
+                                                type={csvImportStatus.type} 
+                                                onDismiss={() => setCsvImportStatus({ message: '', type: '', errors: [] })}
+                                                isHtml={csvImportStatus.errors.length > 0}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}
@@ -1012,7 +1025,7 @@ ${wineListForPrompt}`;
     );
 }
 
-// --- Wine Item Component (Unchanged) ---
+// --- Wine Item Component ---
 const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
