@@ -92,6 +92,12 @@ const ClockIcon = ({className="w-5 h-5"}) => (
     </svg>
 );
 
+const CellarIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.75A2.25 2.25 0 0 1 10.5 14h3A2.25 2.25 0 0 1 15.75 16.25V21m-4.5 0H5.625c-.621 0-1.125-.504-1.125-1.125V11.25a9.75 9.75 0 0 1 18 0v8.625c0 .621-.504 1.125-1.125 1.125h-4.5M12 10.5h.008v.008H12V10.5Zm0 3h.008v.008H12V13.5Zm0 3h.008v.008H12V16.5Z" />
+    </svg>
+);
+
 
 // --- Firebase Config ---
 // Your web app's Firebase configuration
@@ -181,6 +187,9 @@ function App() {
     // New state for auth modals
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+    // New state for navigation view
+    const [currentView, setCurrentView] = useState('myCellar'); // 'myCellar', 'drinkSoon', 'foodPairing'
 
 
     useEffect(() => {
@@ -721,164 +730,238 @@ ${wineListForPrompt}`;
                 {/* Conditionally render content only if user is logged in */}
                 {user && (
                     <>
-                        {/* Action Bar: Search & Add Wine */}
-                        <div className="mb-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                                <div>
-                                    <label htmlFor="wineSearch" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Search Your Wines</label>
-                                    <div className="relative">
-                                        <input
-                                            id="wineSearch"
-                                            type="text"
-                                            placeholder="Producer, region, year..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full p-3 pl-10 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none dark:bg-slate-700 dark:text-slate-200"
-                                        />
-                                        <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => handleOpenWineForm()}
-                                    className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2"
-                                >
-                                    <PlusIcon />
-                                    <span>Add New Wine</span>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        {/* CSV Import Section */}
-                        <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
-                            <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Import Wines from CSV</h2>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                                Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>, <code>drinkingwindowstartyear</code>, <code>drinkingwindowendyear</code>.
-                            </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-                                Ensure locations are unique. Semicolons within fields should be enclosed in double quotes (e.g., "Napa Valley; California").
-                            </p>
-                            <div className="flex flex-col sm:flex-row items-end gap-3">
-                                <div className="flex-grow w-full">
-                                    <label htmlFor="csvFileInput" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Select CSV File</label>
-                                    <input
-                                        id="csvFileInput"
-                                        type="file"
-                                        accept=".csv"
-                                        onChange={handleCsvFileChange}
-                                        className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-800 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-700"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleImportCsv}
-                                    disabled={!csvFile || isImportingCsv}
-                                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                    <UploadIcon />
-                                    <span>{isImportingCsv ? 'Importing...' : 'Import CSV'}</span>
-                                </button>
-                            </div>
-                            {csvImportStatus.message && (
-                                <div className="mt-4">
-                                    <AlertMessage 
-                                        message={csvImportStatus.message + (csvImportStatus.errors.length > 0 ? "<br/><strong>Errors:</strong><ul>" + csvImportStatus.errors.map(e => `<li>- ${e}</li>`).join('') + "</ul>" : "")} 
-                                        type={csvImportStatus.type} 
-                                        onDismiss={() => setCsvImportStatus({ message: '', type: '', errors: [] })}
-                                        isHtml={csvImportStatus.errors.length > 0}
-                                    />
-                                </div>
-                            )}
-                        </div>
+                        {/* Navigation Menu */}
+                        <nav className="mb-6 p-2 bg-white dark:bg-slate-800 rounded-lg shadow flex justify-around sm:justify-start space-x-2 sm:space-x-4 overflow-x-auto">
+                            <button
+                                onClick={() => setCurrentView('myCellar')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'myCellar' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <CellarIcon className="w-5 h-5" />
+                                <span>My Cellar</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentView('drinkSoon')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'drinkSoon' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <ClockIcon className="w-5 h-5" />
+                                <span>Drink Soon</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentView('foodPairing')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'foodPairing' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <FoodIcon className="w-5 h-5" />
+                                <span>Food Pairing</span>
+                            </button>
+                        </nav>
 
-                        {/* Reverse Food Pairing Section */}
-                        <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
-                            <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Find the Perfect Wine for Your Meal</h2>
-                            <div className="flex flex-col sm:flex-row items-end gap-3">
-                                <div className="flex-grow w-full">
-                                    <label htmlFor="foodItem" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">What are you eating?</label>
-                                    <input
-                                        id="foodItem"
-                                        type="text"
-                                        placeholder="e.g., Grilled Chicken, Spicy Pasta"
-                                        value={foodForReversePairing}
-                                        onChange={(e) => setFoodForReversePairing(e.target.value)}
-                                        className="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none dark:bg-slate-700 dark:text-slate-200"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleFindWineForFood}
-                                    disabled={isLoadingReversePairing || wines.length === 0}
-                                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                    <SparklesIcon /> 
-                                    <span>Suggest Wine</span>
-                                </button>
-                            </div>
-                             {wines.length === 0 && (
-                                <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">Add some wines to your cellar to use this feature.</p>
-                            )}
-                        </div>
-
-                        {/* Wines Approaching End of Drinking Window */}
-                        {winesApproachingEnd.length > 0 && (
-                            <div className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg shadow border border-yellow-200 dark:border-yellow-700">
-                                <h2 className="text-xl font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center space-x-2">
-                                    <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-                                    <span>Drink Soon! Wines Requiring Attention</span>
-                                </h2>
-                                <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
-                                    These wines are either past their ideal drinking window or their window ends this year.
-                                </p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {winesApproachingEnd.map(wine => (
-                                        <div key={wine.id} className="bg-yellow-100 dark:bg-yellow-900/40 p-4 rounded-lg flex items-center space-x-3">
-                                            <WineBottleIcon className="w-8 h-8 text-yellow-700 dark:text-yellow-500 flex-shrink-0" />
-                                            <div>
-                                                <p className="font-semibold text-yellow-800 dark:text-yellow-200">{wine.name || wine.producer}</p>
-                                                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                                                    {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear || 'N/A'} - {wine.drinkingWindowEndYear || 'N/A'}
-                                                </p>
-                                                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                                                    Status: **{wine.drinkingStatus}**
-                                                </p>
+                        {/* Conditional Rendering of Views */}
+                        {currentView === 'myCellar' && (
+                            <>
+                                {/* Action Bar: Search & Add Wine */}
+                                <div className="mb-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                                        <div>
+                                            <label htmlFor="wineSearch" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Search Your Wines</label>
+                                            <div className="relative">
+                                                <input
+                                                    id="wineSearch"
+                                                    type="text"
+                                                    placeholder="Producer, region, year..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className="w-full p-3 pl-10 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none dark:bg-slate-700 dark:text-slate-200"
+                                                />
+                                                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
                                             </div>
                                         </div>
-                                    ))}
+                                        <button
+                                            onClick={() => handleOpenWineForm()}
+                                            className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2"
+                                        >
+                                            <PlusIcon />
+                                            <span>Add New Wine</span>
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                                
+                                {/* CSV Import Section */}
+                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Import Wines from CSV</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                                        Expected CSV headers: <code>name</code> (optional), <code>producer</code>, <code>year</code>, <code>region</code>, <code>color</code>, <code>location</code>, <code>drinkingwindowstartyear</code>, <code>drinkingwindowendyear</code>.
+                                    </p>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                                        Ensure locations are unique. Semicolons within fields should be enclosed in double quotes (e.g., "Napa Valley; California").
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row items-end gap-3">
+                                        <div className="flex-grow w-full">
+                                            <label htmlFor="csvFileInput" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Select CSV File</label>
+                                            <input
+                                                id="csvFileInput"
+                                                type="file"
+                                                accept=".csv"
+                                                onChange={handleCsvFileChange}
+                                                className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-800 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-700"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleImportCsv}
+                                            disabled={!csvFile || isImportingCsv}
+                                            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        >
+                                            <UploadIcon />
+                                            <span>{isImportingCsv ? 'Importing...' : 'Import CSV'}</span>
+                                        </button>
+                                    </div>
+                                    {csvImportStatus.message && (
+                                        <div className="mt-4">
+                                            <AlertMessage 
+                                                message={csvImportStatus.message + (csvImportStatus.errors.length > 0 ? "<br/><strong>Errors:</strong><ul>" + csvImportStatus.errors.map(e => `<li>- ${e}</li>`).join('') + "</ul>" : "")} 
+                                                type={csvImportStatus.type} 
+                                                onDismiss={() => setCsvImportStatus({ message: '', type: '', errors: [] })}
+                                                isHtml={csvImportStatus.errors.length > 0}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Wine Collection Display */}
+                                {isLoadingWines && user && <p className="text-center py-4">Loading your wine collection...</p>}
+                                
+                                {!isLoadingWines && wines.length === 0 && !searchTerm && user && (
+                                    <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
+                                        <WineBottleIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
+                                        <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">Your cellar is empty!</h3>
+                                        <p className="text-slate-500 dark:text-slate-400 mb-6">Start by adding your first bottle or importing a CSV file.</p>
+                                    </div>
+                                )}
+
+                                {!isLoadingWines && filteredWines.length === 0 && searchTerm && user && (
+                                    <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
+                                        <SearchIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
+                                        <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">No wines found for "{searchTerm}"</h3>
+                                        <p className="text-slate-500 dark:text-slate-400">Try adjusting your search term.</p>
+                                    </div>
+                                )}
+                                
+                                {filteredWines.length > 0 && user && (
+                                    <>
+                                        <h2 className="text-2xl font-semibold text-slate-700 dark:text-slate-200 mb-4 mt-8">Your Wine Collection</h2>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {filteredWines.map(wine => (
+                                                <WineItem
+                                                    key={wine.id}
+                                                    wine={wine}
+                                                    onEdit={() => handleOpenWineForm(wine)}
+                                                    onDelete={() => confirmDeleteWine(wine.id)}
+                                                    onPairFood={() => handleOpenFoodPairing(wine)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </>
                         )}
 
-
-                        {/* Wine Collection Display */}
-                         {isLoadingWines && user && <p className="text-center py-4">Loading your wine collection...</p>}
-                        
-                        {!isLoadingWines && filteredWines.length === 0 && searchTerm && user && (
-                            <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
-                                 <SearchIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
-                                <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">No wines found for "{searchTerm}"</h3>
-                                <p className="text-slate-500 dark:text-slate-400">Try adjusting your search term.</p>
-                            </div>
+                        {currentView === 'drinkSoon' && (
+                            <>
+                                {/* Wines Approaching End of Drinking Window */}
+                                {winesApproachingEnd.length > 0 ? (
+                                    <div className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg shadow border border-yellow-200 dark:border-yellow-700">
+                                        <h2 className="text-xl font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center space-x-2">
+                                            <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                                            <span>Drink Soon! Wines Requiring Attention</span>
+                                        </h2>
+                                        <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
+                                            These wines are either past their ideal drinking window or their window ends this year.
+                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {winesApproachingEnd.map(wine => (
+                                                <div key={wine.id} className="bg-yellow-100 dark:bg-yellow-900/40 p-4 rounded-lg flex items-center space-x-3">
+                                                    <WineBottleIcon className="w-8 h-8 text-yellow-700 dark:text-yellow-500 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold text-yellow-800 dark:text-yellow-200">{wine.name || wine.producer}</p>
+                                                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                                            {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear || 'N/A'} - {wine.drinkingWindowEndYear || 'N/A'}
+                                                        </p>
+                                                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                                            Status: **{wine.drinkingStatus}**
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
+                                        <ClockIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
+                                        <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">No wines currently requiring immediate attention!</h3>
+                                        <p className="text-slate-500 dark:text-slate-400">All wines are either not yet in their window or have ample time left.</p>
+                                    </div>
+                                )}
+                            </>
                         )}
-                        
-                        {filteredWines.length > 0 && user && (
-                             <>
-                                <h2 className="text-2xl font-semibold text-slate-700 dark:text-slate-200 mb-4 mt-8">Your Wine Collection</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {filteredWines.map(wine => (
-                                        <WineItem
-                                            key={wine.id}
-                                            wine={wine}
-                                            onEdit={() => handleOpenWineForm(wine)}
-                                            onDelete={() => confirmDeleteWine(wine.id)}
-                                            onPairFood={() => handleOpenFoodPairing(wine)}
-                                        />
-                                    ))}
+
+                        {currentView === 'foodPairing' && (
+                            <>
+                                {/* Reverse Food Pairing Section */}
+                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Find the Perfect Wine for Your Meal</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                        Enter a food item and the app will suggest the best wine from your cellar.
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row items-end gap-3">
+                                        <div className="flex-grow w-full">
+                                            <label htmlFor="foodItem" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">What are you eating?</label>
+                                            <input
+                                                id="foodItem"
+                                                type="text"
+                                                placeholder="e.g., Grilled Chicken, Spicy Pasta"
+                                                value={foodForReversePairing}
+                                                onChange={(e) => setFoodForReversePairing(e.target.value)}
+                                                className="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none dark:bg-slate-700 dark:text-slate-200"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleFindWineForFood}
+                                            disabled={isLoadingReversePairing || wines.length === 0}
+                                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        >
+                                            <SparklesIcon /> 
+                                            <span>Suggest Wine</span>
+                                        </button>
+                                    </div>
+                                    {wines.length === 0 && (
+                                        <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">Add some wines to your cellar to use this feature.</p>
+                                    )}
+                                </div>
+                                <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Individual Wine Pairing</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                        You can also find food pairings for specific wines from your main cellar list below.
+                                    </p>
+                                    {/* Optionally list some wines here or direct user to "My Cellar" view */}
+                                    <button
+                                        onClick={() => { setCurrentView('myCellar'); window.scrollTo({top: 0, behavior: 'smooth'}); }}
+                                        className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold flex items-center space-x-2"
+                                    >
+                                        <WineBottleIcon className="w-4 h-4" />
+                                        <span>Go to My Cellar to pick a wine</span>
+                                    </button>
                                 </div>
                             </>
                         )}
                     </>
                 )}
 
-                {/* Modals */}
+                {/* Modals (remain outside conditional rendering to be accessible from all views) */}
                 <WineFormModal isOpen={showWineFormModal} onClose={() => { setShowWineFormModal(false); setCurrentWineToEdit(null); }} onSubmit={currentWineToEdit ? (data) => handleUpdateWine(currentWineToEdit.id, data) : handleAddWine} wine={currentWineToEdit} allWines={wines} />
                 <FoodPairingModal isOpen={showFoodPairingModal} onClose={() => setShowFoodPairingModal(false)} wine={selectedWineForPairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} onFetchPairing={fetchFoodPairing} />
                 <ReverseFoodPairingModal isOpen={showReversePairingModal} onClose={() => setShowReversePairingModal(false)} foodItem={foodForReversePairing} suggestion={reversePairingResult} isLoading={isLoadingReversePairing} />
@@ -902,7 +985,7 @@ ${wineListForPrompt}`;
                     </div>
                 </Modal>
 
-                {/* New Auth Modals */}
+                {/* Auth Modals */}
                 <AuthModal
                     isOpen={showLoginModal}
                     onClose={() => setShowLoginModal(false)}
@@ -929,7 +1012,7 @@ ${wineListForPrompt}`;
     );
 }
 
-// --- Wine Item Component ---
+// --- Wine Item Component (Unchanged) ---
 const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
