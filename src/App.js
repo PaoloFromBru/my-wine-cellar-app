@@ -166,6 +166,112 @@ const AlertMessage = ({ message, type, onDismiss, isHtml = false }) => {
     );
 };
 
+// --- Experience Wine Modal Component (NEW) ---
+const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
+    const [tastingNotes, setTastingNotes] = useState('');
+    const [rating, setRating] = useState(0); // 0 to 5 stars
+    const [consumedDate, setConsumedDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+    const [modalError, setModalError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTastingNotes('');
+            setRating(0);
+            setConsumedDate(new Date().toISOString().slice(0, 10));
+            setModalError('');
+        }
+    }, [isOpen, wine]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setModalError('');
+        setIsLoading(true);
+
+        if (!consumedDate) {
+            setModalError('Consumed date is required.');
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            await onExperience(wine.id, tastingNotes, rating, consumedDate);
+            onClose(); // Close on success
+        } catch (err) {
+            setModalError(`Failed to save experience: ${err.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (!wine) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Experience Wine: ${wine.name || wine.producer}`}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {modalError && <AlertMessage message={modalError} type="error" onDismiss={() => setModalError('')} />}
+                
+                <div>
+                    <label htmlFor="consumedDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Date Consumed <span className="text-red-500">*</span></label>
+                    <input
+                        type="date"
+                        id="consumedDate"
+                        value={consumedDate}
+                        onChange={(e) => setConsumedDate(e.target.value)}
+                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-green-500 focus:border-green-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                        required
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="rating" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rating (1-5)</label>
+                    <div className="flex items-center mt-1 space-x-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <StarIcon
+                                key={star}
+                                className={`w-6 h-6 cursor-pointer ${
+                                    star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
+                                }`}
+                                onClick={() => setRating(star)}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <label htmlFor="tastingNotes" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Tasting Notes</label>
+                    <textarea
+                        id="tastingNotes"
+                        value={tastingNotes}
+                        onChange={(e) => setTastingNotes(e.target.value)}
+                        rows="4"
+                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-green-500 focus:border-green-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                        placeholder="e.g., Fruity, earthy, paired well with..."
+                    ></textarea>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? 'Saving...' : 'Save Experience & Drink'}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+
 // --- Main App Component ---
 function App() {
     const [auth, setAuthInstance] = useState(null); 
@@ -1307,11 +1413,11 @@ const WineItem = ({ wine, onEdit, onExperience }) => { // Changed onDelete to on
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
                 <button
-                    onClick={onExperience} // Changed to onExperience
+                    onClick={onExperience} 
                     title="Mark as Drank / Add Notes"
                     className="p-2 rounded-md text-sm text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-700 transition-colors"
                 >
-                    <CheckCircleIcon /> {/* New icon for "Drank" */}
+                    <CheckCircleIcon /> 
                 </button>
                 <button
                     onClick={onEdit}
@@ -1320,13 +1426,12 @@ const WineItem = ({ wine, onEdit, onExperience }) => { // Changed onDelete to on
                 >
                     <EditIcon />
                 </button>
-                {/* Removed delete button here, it's now handled by the Experience modal or Erase All */}
             </div>
         </div>
     );
 };
 
-// --- Experienced Wine Item Component (NEW) ---
+// --- Experienced Wine Item Component ---
 const ExperiencedWineItem = ({ wine }) => {
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
