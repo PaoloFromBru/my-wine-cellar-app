@@ -229,8 +229,7 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                         {[1, 2, 3, 4, 5].map((star) => (
                             <StarIcon
                                 key={star}
-                                // Added z-10 and relative to ensure clickability
-                                className={`w-6 h-6 inline-block cursor-pointer relative z-10 ${ 
+                                className={`w-6 h-6 inline-block cursor-pointer ${ 
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
                                 onClick={() => setRating(star)} 
