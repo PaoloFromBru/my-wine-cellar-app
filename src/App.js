@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
-    signInAnonymously, // Keeping import for completeness, though not directly called in default flow now
+    signInAnonymously, 
     signInWithCustomToken,
     onAuthStateChanged,
     signOut,
@@ -98,6 +98,18 @@ const CellarIcon = ({ className = "w-5 h-5" }) => (
     </svg>
 );
 
+const CheckCircleIcon = ({className="w-5 h-5"}) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
+
+const StarIcon = ({ className = "w-4 h-4" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.109 5.625.441a.562.562 0 0 1 .322.978l-4.307 3.972 1.282 5.586a.562.562 0 0 1-.84.61l-4.908-2.921-4.908 2.921a.562.562 0 0 1-.84-.61l1.282-5.586-4.307-3.972a.562.562 0 0 1 .322-.978l5.625-.441L11.48 3.499Z" />
+    </svg>
+);
+
 
 // --- Firebase Config ---
 // Your web app's Firebase configuration
@@ -162,6 +174,7 @@ function App() {
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [wines, setWines] = useState([]);
+    const [experiencedWines, setExperiencedWines] = useState([]); // New state for experienced wines
     const [isLoadingWines, setIsLoadingWines] = useState(true);
     const [error, setError] = useState(null);
     
@@ -189,7 +202,14 @@ function App() {
     const [showRegisterModal, setShowRegisterModal] = useState(false);
 
     // New state for navigation view
-    const [currentView, setCurrentView] = useState('myCellar'); // 'myCellar', 'drinkSoon', 'foodPairing', 'importWines'
+    const [currentView, setCurrentView] = useState('myCellar'); // 'myCellar', 'drinkSoon', 'foodPairing', 'importWines', 'experiencedWines'
+
+    // State for Experience Wine Modal
+    const [showExperienceWineModal, setShowExperienceWineModal] = useState(false);
+    const [wineToExperience, setWineToExperience] = useState(null);
+
+    // State for Erase All Wines Confirmation
+    const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
 
 
     useEffect(() => {
@@ -213,8 +233,6 @@ function App() {
                     setUserId(firebaseUser.uid);
                     setError(null); 
                 } else {
-                    // Removed automatic signInAnonymously fallback
-                    // Now, if no user is authenticated, the app will show Login/Register buttons
                     setUser(null);
                     setUserId(null);
                 }
@@ -228,6 +246,7 @@ function App() {
         }
     }, []);
 
+    // Fetch wines and experienced wines when db and userId are available
     useEffect(() => {
         if (!db || !userId || !isAuthReady) {
             setIsLoadingWines(isAuthReady && (!db || !userId)); 
@@ -236,9 +255,9 @@ function App() {
         
         setIsLoadingWines(true);
         const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
-        const q = query(collection(db, winesCollectionPath));
+        const experiencedWinesCollectionPath = `artifacts/${appId}/users/${userId}/experiencedWines`;
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const unsubscribeWines = onSnapshot(query(collection(db, winesCollectionPath)), (querySnapshot) => {
             const winesData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
             winesData.sort((a, b) => {
                 const producerCompare = (a.producer || "").localeCompare(b.producer || "");
@@ -246,15 +265,34 @@ function App() {
                 return (a.year || 0) - (b.year || 0);
             });
             setWines(winesData);
-            setIsLoadingWines(false);
             setError(null); 
         }, (err) => {
             console.error("Error fetching wines:", err);
             setError(`Failed to fetch wines: ${err.message}. Check Firestore rules & connectivity.`);
             setWines([]); 
-            setIsLoadingWines(false);
         });
-        return () => unsubscribe();
+
+        const unsubscribeExperiencedWines = onSnapshot(query(collection(db, experiencedWinesCollectionPath)), (querySnapshot) => {
+            const experiencedWinesData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+            // Sort experienced wines by consumed date, newest first
+            experiencedWinesData.sort((a, b) => {
+                const dateA = a.consumedAt instanceof Timestamp ? a.consumedAt.toDate() : new Date(a.consumedAt);
+                const dateB = b.consumedAt instanceof Timestamp ? b.consumedAt.toDate() : new Date(b.consumedAt);
+                return dateB - dateA; // Newest first
+            });
+            setExperiencedWines(experiencedWinesData);
+        }, (err) => {
+            console.error("Error fetching experienced wines:", err);
+            // Don't set global error for this, as main wines might still load
+            setExperiencedWines([]); 
+        });
+
+        setIsLoadingWines(false); // Set to false after both snapshots are set up
+        
+        return () => {
+            unsubscribeWines();
+            unsubscribeExperiencedWines();
+        };
     }, [db, userId, isAuthReady]);
 
     const handleAddWine = async (wineData) => {
@@ -286,15 +324,59 @@ function App() {
         } catch (err) { console.error("Error updating wine:", err); setError(`Failed to update wine: ${err.message}`); }
     };
 
+    // New: Handle Drinking/Experiencing a Wine
+    const handleExperienceWine = async (wineId, notes, rating, consumedDate) => {
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return; }
+        const wineToMove = wines.find(w => w.id === wineId);
+        if (!wineToMove) {
+            setError("Wine not found in current cellar to experience.");
+            return;
+        }
+
+        try {
+            const batch = writeBatch(db);
+            const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineId);
+            const experiencedWineCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/experiencedWines`);
+            
+            // 1. Add to experienced wines collection
+            await addDoc(experiencedWineCollectionRef, {
+                ...wineToMove,
+                tastingNotes: notes,
+                rating: rating,
+                consumedAt: consumedDate ? Timestamp.fromDate(new Date(consumedDate)) : Timestamp.now(),
+                experiencedAt: Timestamp.now(), // Store the time it was marked as experienced
+            });
+
+            // 2. Delete from active wines collection
+            await deleteDoc(wineDocRef);
+
+            setError(null);
+            setShowExperienceWineModal(false);
+            setWineToExperience(null);
+        } catch (err) {
+            console.error("Error experiencing wine:", err);
+            setError(`Failed to experience wine: ${err.message}`);
+        }
+    };
+
+    // Previously handleDeleteWine - now opens experience modal
+    const confirmExperienceWine = (wineId) => {
+        const wine = wines.find(w => w.id === wineId);
+        setWineToExperience(wine);
+        setShowExperienceWineModal(true);
+    };
+
+    // Old handleDeleteWine logic (for actual deletion if user wants to truly remove)
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [wineToDelete, setWineToDelete] = useState(null);
 
-    const confirmDeleteWine = (wineIdToDelete) => {
-        const wine = wines.find(w => w.id === wineIdToDelete);
-        setWineToDelete(wine); setShowDeleteConfirmModal(true);
+    const confirmDeleteWinePermanently = (wineId) => { // Renamed to clarify
+        const wine = wines.find(w => w.id === wineId);
+        setWineToDelete(wine);
+        setShowDeleteConfirmModal(true);
     };
 
-    const handleDeleteWine = async () => {
+    const handleDeleteWinePermanently = async () => { // Renamed
         if (!db || !userId || !wineToDelete) {
             setError("Database error or no wine selected for deletion.");
             setShowDeleteConfirmModal(false); return;
@@ -320,7 +402,6 @@ function App() {
 
         let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
         const payload = { contents: chatHistory };
-        // Use environment variable for API Key
         const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -379,7 +460,6 @@ ${wineListForPrompt}`;
         
         let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
         const payload = { contents: chatHistory };
-        // Use environment variable for API Key
         const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -416,7 +496,7 @@ ${wineListForPrompt}`;
 
     const handleLogout = async () => {
         if (auth) {
-            try { await signOut(auth); setUser(null); setUserId(null); setWines([]); } 
+            try { await signOut(auth); setUser(null); setUserId(null); setWines([]); setExperiencedWines([]); } 
             catch (e) { console.error("Logout failed: ", e); setError("Logout failed. Please try again."); }
         }
     };
@@ -465,7 +545,7 @@ ${wineListForPrompt}`;
             const values = parseLine(lines[i]);
             const rowObject = {};
             headers.forEach((header, index) => {
-                rowObject[header] = values[index] ? values[index].trim() : ''; // Also trim values
+                rowObject[header] = values[index] ? values[index].trim() : ''; 
             });
             data.push(rowObject);
         }
@@ -600,6 +680,94 @@ ${wineListForPrompt}`;
     };
 
     // --- End CSV Import ---
+
+    // --- Export Wines to CSV ---
+    const handleExportCsv = () => {
+        if (wines.length === 0) {
+            setError("No wines in your cellar to export.");
+            return;
+        }
+
+        const headers = ["Name", "Producer", "Year", "Region", "Color", "Location", "DrinkingWindowStartYear", "DrinkingWindowEndYear"];
+        // Escape content with double quotes and handle semicolons
+        const escapeCsvField = (field) => {
+            if (field === null || field === undefined) return '';
+            let value = String(field);
+            if (value.includes(';') || value.includes(',') || value.includes('"') || value.includes('\n')) {
+                return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+        };
+
+        const csvRows = [
+            headers.join(';') // Use semicolon as delimiter
+        ];
+
+        wines.forEach(wine => {
+            const row = [
+                escapeCsvField(wine.name),
+                escapeCsvField(wine.producer),
+                escapeCsvField(wine.year),
+                escapeCsvField(wine.region),
+                escapeCsvField(wine.color),
+                escapeCsvField(wine.location),
+                escapeCsvField(wine.drinkingWindowStartYear),
+                escapeCsvField(wine.drinkingWindowEndYear)
+            ];
+            csvRows.push(row.join(';'));
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `my_wine_cellar_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        setError(null);
+    };
+
+    // --- Erase All Wines ---
+    const confirmEraseAllWines = () => {
+        if (wines.length === 0) {
+            setError("Your cellar is already empty!");
+            return;
+        }
+        setShowEraseAllConfirmModal(true);
+    };
+
+    const handleEraseAllWines = async () => {
+        if (!db || !userId) {
+            setError("Database not ready or user not logged in.");
+            setShowEraseAllConfirmModal(false);
+            return;
+        }
+        try {
+            const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
+            const q = query(collection(db, winesCollectionPath));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                setError("Your cellar is already empty!");
+                setShowEraseAllConfirmModal(false);
+                return;
+            }
+
+            const batch = writeBatch(db);
+            querySnapshot.forEach((docSnap) => {
+                batch.delete(doc(db, `artifacts/${appId}/users/${userId}/wines`, docSnap.id));
+            });
+            await batch.commit();
+            
+            setError({message: "All wines have been successfully erased from your cellar.", type: 'success'}); // Use object for success type
+            setShowEraseAllConfirmModal(false);
+        } catch (err) {
+            console.error("Error erasing all wines:", err);
+            setError(`Failed to erase all wines: ${err.message}`);
+            setShowEraseAllConfirmModal(false);
+        }
+    };
+
 
     const getWinesApproachingEndOfWindow = useCallback(() => {
         const currentYear = new Date().getFullYear();
@@ -766,7 +934,16 @@ ${wineListForPrompt}`;
                                 }`}
                             >
                                 <UploadIcon className="w-5 h-5" />
-                                <span>Import Wines</span>
+                                <span>Import/Export</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentView('experiencedWines')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'experiencedWines' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <CheckCircleIcon className="w-5 h-5" />
+                                <span>Experienced Wines</span>
                             </button>
                         </nav>
 
@@ -828,8 +1005,7 @@ ${wineListForPrompt}`;
                                                     key={wine.id}
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
-                                                    onDelete={() => confirmDeleteWine(wine.id)}
-                                                    onPairFood={() => handleOpenFoodPairing(wine)}
+                                                    onExperience={() => confirmExperienceWine(wine.id)} // Changed from onDelete
                                                 />
                                             ))}
                                         </div>
@@ -852,18 +1028,12 @@ ${wineListForPrompt}`;
                                         </p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {winesApproachingEnd.map(wine => (
-                                                <div key={wine.id} className="bg-yellow-100 dark:bg-yellow-900/40 p-4 rounded-lg flex items-center space-x-3">
-                                                    <WineBottleIcon className="w-8 h-8 text-yellow-700 dark:text-yellow-500 flex-shrink-0" />
-                                                    <div>
-                                                        <p className="font-semibold text-yellow-800 dark:text-yellow-200">{wine.name || wine.producer}</p>
-                                                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                                                            {wine.year || 'N/A'} | Window: {wine.drinkingWindowStartYear || 'N/A'} - {wine.drinkingWindowEndYear || 'N/A'}
-                                                        </p>
-                                                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                                                            Status: **{wine.drinkingStatus}**
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                                <WineItem
+                                                    key={wine.id}
+                                                    wine={wine}
+                                                    onEdit={() => handleOpenWineForm(wine)}
+                                                    onExperience={() => confirmExperienceWine(wine.id)}
+                                                />
                                             ))}
                                         </div>
                                     </div>
@@ -915,7 +1085,6 @@ ${wineListForPrompt}`;
                                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                                         You can also find food pairings for specific wines from your main cellar list.
                                     </p>
-                                    {/* Optionally list some wines here or direct user to "My Cellar" view */}
                                     <button
                                         onClick={() => { setCurrentView('myCellar'); window.scrollTo({top: 0, behavior: 'smooth'}); }}
                                         className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold flex items-center space-x-2"
@@ -969,6 +1138,54 @@ ${wineListForPrompt}`;
                                         </div>
                                     )}
                                 </div>
+                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+                                    <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-3">Export Wines to CSV</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                        Download your current wine cellar data as a CSV file.
+                                    </p>
+                                    <button
+                                        onClick={handleExportCsv}
+                                        disabled={wines.length === 0}
+                                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        <UploadIcon className="rotate-180" /> {/* Rotate upload icon for download */}
+                                        <span>Export Wines</span>
+                                    </button>
+                                </div>
+
+                                <div className="mb-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow border border-red-300 dark:border-red-700">
+                                    <h2 className="text-xl font-semibold text-red-700 dark:text-red-300 mb-3">Danger Zone: Erase All Wines</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                        This action will permanently delete ALL wines from your cellar. This cannot be undone.
+                                    </p>
+                                    <button
+                                        onClick={confirmEraseAllWines}
+                                        disabled={wines.length === 0}
+                                        className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-md shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        <TrashIcon />
+                                        <span>Erase All Wines</span>
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {currentView === 'experiencedWines' && (
+                            <>
+                                <h2 className="text-2xl font-semibold text-slate-700 dark:text-slate-200 mb-4 mt-8">Experienced Wines</h2>
+                                {experiencedWines.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {experiencedWines.map(wine => (
+                                            <ExperiencedWineItem key={wine.id} wine={wine} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-lg shadow-md mt-6">
+                                        <CheckCircleIcon className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" />
+                                        <h3 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">No experienced wines yet.</h3>
+                                        <p className="text-slate-500 dark:text-slate-400">When you drink a wine, it will appear here!</p>
+                                    </div>
+                                )}
                             </>
                         )}
                     </>
@@ -978,9 +1195,11 @@ ${wineListForPrompt}`;
                 <WineFormModal isOpen={showWineFormModal} onClose={() => { setShowWineFormModal(false); setCurrentWineToEdit(null); }} onSubmit={currentWineToEdit ? (data) => handleUpdateWine(currentWineToEdit.id, data) : handleAddWine} wine={currentWineToEdit} allWines={wines} />
                 <FoodPairingModal isOpen={showFoodPairingModal} onClose={() => setShowFoodPairingModal(false)} wine={selectedWineForPairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} onFetchPairing={fetchFoodPairing} />
                 <ReverseFoodPairingModal isOpen={showReversePairingModal} onClose={() => setShowReversePairingModal(false)} foodItem={foodForReversePairing} suggestion={reversePairingResult} isLoading={isLoadingReversePairing} />
-                <Modal isOpen={showDeleteConfirmModal} onClose={() => setShowDeleteConfirmModal(false)} title="Confirm Deletion">
+                
+                {/* Delete Confirmation Modal - now for permanent deletion */}
+                <Modal isOpen={showDeleteConfirmModal} onClose={() => setShowDeleteConfirmModal(false)} title="Confirm Permanent Deletion">
                     <p className="text-slate-700 dark:text-slate-300 mb-4">
-                        Are you sure you want to delete the wine: <strong className="font-semibold">{wineToDelete?.name || wineToDelete?.producer} ({wineToDelete?.year || 'N/A'})</strong>? This action cannot be undone.
+                        Are you sure you want to **permanently delete** the wine: <strong className="font-semibold">{wineToDelete?.name || wineToDelete?.producer} ({wineToDelete?.year || 'N/A'})</strong>? This action cannot be undone and it will not be moved to "Experienced Wines".
                     </p>
                     <div className="flex justify-end space-x-3">
                         <button
@@ -990,10 +1209,42 @@ ${wineListForPrompt}`;
                             Cancel
                         </button>
                         <button
-                            onClick={handleDeleteWine}
+                            onClick={handleDeleteWinePermanently}
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
-                            Delete Wine
+                            Delete Permanently
+                        </button>
+                    </div>
+                </Modal>
+
+                {/* Experience Wine Modal */}
+                <ExperienceWineModal
+                    isOpen={showExperienceWineModal}
+                    onClose={() => setShowExperienceWineModal(false)}
+                    wine={wineToExperience}
+                    onExperience={handleExperienceWine}
+                />
+
+                {/* Erase All Wines Confirmation Modal */}
+                <Modal isOpen={showEraseAllConfirmModal} onClose={() => setShowEraseAllConfirmModal(false)} title="Confirm Erase All Wines">
+                    <p className="text-red-700 dark:text-red-300 mb-4 font-bold">
+                        DANGER ZONE: This action will permanently delete ALL wines from your active cellar. This includes any tasting notes and associated data. This cannot be undone.
+                    </p>
+                    <p className="text-slate-700 dark:text-slate-300 mb-4">
+                        Are you absolutely sure you want to proceed?
+                    </p>
+                    <div className="flex justify-end space-x-3">
+                        <button
+                            onClick={() => setShowEraseAllConfirmModal(false)}
+                            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleEraseAllWines}
+                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
+                        >
+                            Confirm Erase All
                         </button>
                     </div>
                 </Modal>
@@ -1026,7 +1277,7 @@ ${wineListForPrompt}`;
 }
 
 // --- Wine Item Component ---
-const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
+const WineItem = ({ wine, onEdit, onExperience }) => { // Changed onDelete to onExperience
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
         white: 'bg-yellow-100 dark:bg-yellow-700 border-yellow-300 dark:border-yellow-500',
@@ -1056,11 +1307,11 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
                 <button
-                    onClick={onPairFood}
-                    title="Pair with Food (AI)"
+                    onClick={onExperience} // Changed to onExperience
+                    title="Mark as Drank / Add Notes"
                     className="p-2 rounded-md text-sm text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-700 transition-colors"
                 >
-                    <FoodIcon />
+                    <CheckCircleIcon /> {/* New icon for "Drank" */}
                 </button>
                 <button
                     onClick={onEdit}
@@ -1069,17 +1320,53 @@ const WineItem = ({ wine, onEdit, onDelete, onPairFood }) => {
                 >
                     <EditIcon />
                 </button>
-                <button
-                    onClick={onDelete}
-                    title="Delete Wine"
-                    className="p-2 rounded-md text-sm text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-700 transition-colors"
-                >
-                    <TrashIcon />
-                </button>
+                {/* Removed delete button here, it's now handled by the Experience modal or Erase All */}
             </div>
         </div>
     );
 };
+
+// --- Experienced Wine Item Component (NEW) ---
+const ExperiencedWineItem = ({ wine }) => {
+    const wineColors = {
+        red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
+        white: 'bg-yellow-100 dark:bg-yellow-700 border-yellow-300 dark:border-yellow-500',
+        rose: 'bg-pink-100 dark:bg-pink-700 border-pink-300 dark:border-pink-500',
+        sparkling: 'bg-blue-100 dark:bg-blue-700 border-blue-300 dark:border-blue-500',
+        other: 'bg-slate-200 dark:bg-slate-600 border-slate-400 dark:border-slate-500',
+    };
+    const colorClass = wineColors[wine.color?.toLowerCase()] || wineColors.other;
+
+    const consumedDate = wine.consumedAt ? (wine.consumedAt instanceof Timestamp ? wine.consumedAt.toDate().toLocaleDateString() : new Date(wine.consumedAt).toLocaleDateString()) : 'N/A';
+
+    return (
+        <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden flex flex-col`}>
+            <div className={`p-4 border-l-8 ${colorClass}`}>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 truncate" title={wine.name || wine.producer}>{wine.name || wine.producer}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{wine.year || 'N/A'}</p>
+            </div>
+            <div className="p-5 space-y-3 flex-grow">
+                <p><strong className="text-slate-600 dark:text-slate-300">Producer:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.producer}</span></p>
+                <p><strong className="text-slate-600 dark:text-slate-300">Region:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.region}</span></p>
+                <p><strong className="text-slate-600 dark:text-slate-300">Color:</strong> <span className="text-slate-700 dark:text-slate-200 capitalize">{wine.color}</span></p>
+                <p><strong className="text-slate-600 dark:text-slate-300">Location:</strong> <span className="text-slate-700 dark:text-slate-200">{wine.location}</span></p>
+                
+                <p><strong className="text-slate-600 dark:text-slate-300">Consumed:</strong> <span className="text-slate-700 dark:text-slate-200">{consumedDate}</span></p>
+                <p><strong className="text-slate-600 dark:text-slate-300">Rating:</strong> 
+                    <span className="text-slate-700 dark:text-slate-200 flex items-center">
+                        {wine.rating > 0 ? (
+                            Array.from({ length: 5 }, (_, i) => (
+                                <StarIcon key={i} className={`w-4 h-4 ${i < wine.rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'}`} />
+                            ))
+                        ) : 'N/A'}
+                    </span>
+                </p>
+                <p><strong className="text-slate-600 dark:text-slate-300">Notes:</strong> <span className="text-slate-700 dark:text-slate-200 italic">{wine.tastingNotes || 'No notes added.'}</span></p>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Wine Form Modal Component ---
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => { 
