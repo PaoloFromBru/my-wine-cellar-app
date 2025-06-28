@@ -232,7 +232,7 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                                 className={`w-6 h-6 cursor-pointer ${
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
-                                onClick={() => setRating(star)}
+                                onClick={() => setRating(star)} // Re-enabled onClick
                             />
                         ))}
                     </div>
@@ -1112,6 +1112,7 @@ ${wineListForPrompt}`;
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
                                                     onExperience={() => confirmExperienceWine(wine.id)} 
+                                                    onPairFood={() => handleOpenFoodPairing(wine)} // Re-added for individual wine pairing
                                                 />
                                             ))}
                                         </div>
@@ -1139,6 +1140,7 @@ ${wineListForPrompt}`;
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
                                                     onExperience={() => confirmExperienceWine(wine.id)}
+                                                    onPairFood={() => handleOpenFoodPairing(wine)} // Re-added for individual wine pairing
                                                 />
                                             ))}
                                         </div>
@@ -1383,7 +1385,7 @@ ${wineListForPrompt}`;
 }
 
 // --- Wine Item Component ---
-const WineItem = ({ wine, onEdit, onExperience }) => { // Changed onDelete to onExperience
+const WineItem = ({ wine, onEdit, onExperience, onPairFood }) => { // Added onPairFood here
     const wineColors = {
         red: 'bg-red-200 dark:bg-red-800 border-red-400 dark:border-red-600',
         white: 'bg-yellow-100 dark:bg-yellow-700 border-yellow-300 dark:border-yellow-500',
@@ -1412,6 +1414,13 @@ const WineItem = ({ wine, onEdit, onExperience }) => { // Changed onDelete to on
                 )}
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
+                <button
+                    onClick={onPairFood} // Re-added this button
+                    title="Pair with Food (AI)"
+                    className="p-2 rounded-md text-sm text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-700 transition-colors"
+                >
+                    <FoodIcon />
+                </button>
                 <button
                     onClick={onExperience} 
                     title="Mark as Drank / Add Notes"
