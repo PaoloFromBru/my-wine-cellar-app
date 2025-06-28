@@ -232,7 +232,7 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                                 className={`w-6 h-6 cursor-pointer ${ // Ensure cursor-pointer is present
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
-                                onClick={() => setRating(star)} 
+                                onClick={() => setRating(star)} // Re-enabled onClick
                             />
                         ))}
                     </div>
