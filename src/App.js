@@ -23,7 +23,7 @@ import {
     Timestamp,
     writeBatch 
 } from 'firebase/firestore';
-import { setLogLevel } from 'firebase/firestore'; // Fixed: Changed 'require' to 'from'
+import { setLogLevel } from 'firebase/firestore';
 
 // --- Icons ---
 const WineBottleIcon = ({ className = "w-6 h-6" }) => (
@@ -229,7 +229,7 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                         {[1, 2, 3, 4, 5].map((star) => (
                             <StarIcon
                                 key={star}
-                                className={`w-6 h-6 cursor-pointer ${
+                                className={`w-6 h-6 cursor-pointer ${ // Ensure cursor-pointer is present
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
                                 onClick={() => setRating(star)} 
