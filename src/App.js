@@ -23,7 +23,7 @@ import {
     Timestamp,
     writeBatch 
 } from 'firebase/firestore';
-import { setLogLevel } = require("firebase/firestore");
+import { setLogLevel } from 'firebase/firestore'; // Fixed: Changed 'require' to 'from'
 
 // --- Icons ---
 const WineBottleIcon = ({ className = "w-6 h-6" }) => (
@@ -317,6 +317,10 @@ function App() {
     // State for Erase All Wines Confirmation
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
 
+    // State for Delete Experienced Wine Confirmation
+    const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
+    const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
+
 
     useEffect(() => {
         if (Object.keys(firebaseConfig).length === 0) {
@@ -493,6 +497,31 @@ function App() {
             setError(null); setShowDeleteConfirmModal(false); setWineToDelete(null);
         } catch (err) { console.error("Error deleting wine:", err); setError(`Failed to delete wine: ${err.message}`); setShowDeleteConfirmModal(false); }
     };
+
+    // New: Delete Experienced Wine
+    const confirmDeleteExperiencedWine = (wineId) => {
+        const wine = experiencedWines.find(w => w.id === wineId);
+        setExperiencedWineToDelete(wine);
+        setShowDeleteExperiencedConfirmModal(true);
+    };
+
+    const handleDeleteExperiencedWine = async () => {
+        if (!db || !userId || !experiencedWineToDelete) {
+            setError("Database error or no experienced wine selected for deletion.");
+            setShowDeleteExperiencedConfirmModal(false);
+            return;
+        }
+        try {
+            const experiencedWineDocRef = doc(db, `artifacts/${appId}/users/${userId}/experiencedWines`, experiencedWineToDelete.id);
+            await deleteDoc(experiencedWineDocRef);
+            setError(null); setShowDeleteExperiencedConfirmModal(false); setExperiencedWineToDelete(null);
+        } catch (err) {
+            console.error("Error deleting experienced wine:", err);
+            setError(`Failed to delete experienced wine: ${err.message}`);
+            setShowDeleteExperiencedConfirmModal(false);
+        }
+    };
+
 
     const handleOpenWineForm = (wine = null) => { setCurrentWineToEdit(wine); setShowWineFormModal(true); };
     const handleOpenFoodPairing = (wine) => { setSelectedWineForPairing(wine); setFoodPairingSuggestion(''); setShowFoodPairingModal(true); };
@@ -1287,7 +1316,7 @@ ${wineListForPrompt}`;
                                             <ExperiencedWineItem 
                                                 key={wine.id} 
                                                 wine={wine} 
-                                                onDelete={() => confirmDeleteExperiencedWine(wine.id)} // Added delete option
+                                                onDelete={() => confirmDeleteExperiencedWine(wine.id)} 
                                             />
                                         ))}
                                     </div>
