@@ -1005,7 +1005,7 @@ ${wineListForPrompt}`;
                                                     key={wine.id}
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
-                                                    onExperience={() => confirmExperienceWine(wine.id)} // Changed from onDelete
+                                                    onExperience={() => confirmExperienceWine(wine.id)} 
                                                 />
                                             ))}
                                         </div>
