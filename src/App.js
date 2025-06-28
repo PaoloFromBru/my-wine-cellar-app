@@ -229,10 +229,10 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                         {[1, 2, 3, 4, 5].map((star) => (
                             <StarIcon
                                 key={star}
-                                className={`w-6 h-6 cursor-pointer ${ // Ensure cursor-pointer is present
+                                className={`w-6 h-6 inline-block cursor-pointer ${ // Ensure cursor-pointer and inline-block are present
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
-                                onClick={() => setRating(star)} // Re-enabled onClick
+                                onClick={() => setRating(star)} 
                             />
                         ))}
                     </div>
@@ -511,17 +511,18 @@ function App() {
             setShowDeleteExperiencedConfirmModal(false);
             return;
         }
-        console.log("Attempting to delete experienced wine with ID:", experiencedWineToDelete.id); // Log for debugging
+        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineToDelete.id); // Debug log
         try {
-            const experiencedWineDocRef = doc(db, `artifacts/${appId}/users/${userId}/experiencedWines`, experiencedWineToDelete.id);
+            const experiencedWineCollectionPath = `artifacts/${appId}/users/${userId}/experiencedWines`; // Corrected path
+            const experiencedWineDocRef = doc(db, experiencedWineCollectionPath, experiencedWineToDelete.id);
             await deleteDoc(experiencedWineDocRef);
-            console.log("Experienced wine successfully deleted from Firestore:", experiencedWineToDelete.id); // Log success
+            console.log("DEBUG: Experienced wine successfully deleted from Firestore:", experiencedWineToDelete.id); // Debug log
             setError(null); 
             setShowDeleteExperiencedConfirmModal(false); 
             setExperiencedWineToDelete(null);
         } catch (err) {
-            console.error("Error deleting experienced wine from Firestore:", err); // Log the actual Firebase error
-            setError(`Failed to delete experienced wine: ${err.message}`);
+            console.error("DEBUG: Error deleting experienced wine from Firestore:", err.code, err.message); // Detailed error log
+            setError(`Failed to delete experienced wine: ${err.message}. Check browser console for details (Code: ${err.code}).`);
             setShowDeleteExperiencedConfirmModal(false);
         }
     };
@@ -1537,7 +1538,7 @@ const ExperiencedWineItem = ({ wine, onDelete }) => { // Added onDelete prop
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 flex justify-end space-x-2 border-t border-slate-200 dark:border-slate-700">
                 <button
-                    onClick={onDelete} // Added delete button for experienced wines
+                    onClick={onDelete} 
                     title="Delete Experienced Wine"
                     className="p-2 rounded-md text-sm text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-700 transition-colors"
                 >
