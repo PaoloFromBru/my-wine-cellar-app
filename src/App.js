@@ -170,7 +170,7 @@ const AlertMessage = ({ message, type, onDismiss, isHtml = false }) => {
 const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
     const [tastingNotes, setTastingNotes] = useState('');
     const [rating, setRating] = useState(0); // 0 to 5 stars
-    const [consumedDate, setConsumedDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+    const [consumedDate, setConsumedDate] = useState(new Date().toISOString().slice(0, 10)); //YYYY-MM-DD
     const [modalError, setModalError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -232,7 +232,7 @@ const ExperienceWineModal = ({ isOpen, onClose, wine, onExperience }) => {
                                 className={`w-6 h-6 cursor-pointer ${
                                     star <= rating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'
                                 }`}
-                                onClick={() => setRating(star)} // Re-enabled onClick
+                                onClick={() => setRating(star)} 
                             />
                         ))}
                     </div>
@@ -1112,7 +1112,7 @@ ${wineListForPrompt}`;
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
                                                     onExperience={() => confirmExperienceWine(wine.id)} 
-                                                    onPairFood={() => handleOpenFoodPairing(wine)} // Re-added for individual wine pairing
+                                                    onPairFood={() => handleOpenFoodPairing(wine)} 
                                                 />
                                             ))}
                                         </div>
@@ -1140,7 +1140,7 @@ ${wineListForPrompt}`;
                                                     wine={wine}
                                                     onEdit={() => handleOpenWineForm(wine)}
                                                     onExperience={() => confirmExperienceWine(wine.id)}
-                                                    onPairFood={() => handleOpenFoodPairing(wine)} // Re-added for individual wine pairing
+                                                    onPairFood={() => handleOpenFoodPairing(wine)} 
                                                 />
                                             ))}
                                         </div>
