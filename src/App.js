@@ -511,12 +511,16 @@ function App() {
             setShowDeleteExperiencedConfirmModal(false);
             return;
         }
+        console.log("Attempting to delete experienced wine with ID:", experiencedWineToDelete.id); // Log for debugging
         try {
             const experiencedWineDocRef = doc(db, `artifacts/${appId}/users/${userId}/experiencedWines`, experiencedWineToDelete.id);
             await deleteDoc(experiencedWineDocRef);
-            setError(null); setShowDeleteExperiencedConfirmModal(false); setExperiencedWineToDelete(null);
+            console.log("Experienced wine successfully deleted from Firestore:", experiencedWineToDelete.id); // Log success
+            setError(null); 
+            setShowDeleteExperiencedConfirmModal(false); 
+            setExperiencedWineToDelete(null);
         } catch (err) {
-            console.error("Error deleting experienced wine:", err);
+            console.error("Error deleting experienced wine from Firestore:", err); // Log the actual Firebase error
             setError(`Failed to delete experienced wine: ${err.message}`);
             setShowDeleteExperiencedConfirmModal(false);
         }
