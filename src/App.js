@@ -117,7 +117,7 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cella
 
 function App() {
     // --- Global Error State ---
-    const [globalError, setGlobalError] = useState(null); // Renamed error to globalError to avoid conflicts
+    const [globalError, setGlobalError] = useState(null); 
 
     // --- Data and Auth Hooks ---
     const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
@@ -144,9 +144,9 @@ function App() {
         pairingError, 
         fetchFoodPairing, 
         findWineForFood,
-        setFoodPairingSuggestion, // Make sure setFoodPairingSuggestion is destructured here
+        setFoodPairingSuggestion: setFoodPairingSuggestionState, // Renamed to avoid conflict
         setPairingError // Destructure and keep original name for local use in FoodPairingAI
-    } = useFoodPairingAI(setGlobalErrorCallback); // Pass setGlobalError to AI hook
+    } = useFoodPairingAI(setGlobalErrorCallback); 
 
 
     // --- Local UI State (Managed within App.js) ---
@@ -167,7 +167,7 @@ function App() {
     const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
     const [wineToDelete, setWineToDelete] = useState(null); 
-    const [foodForReversePairing, setFoodForReversePairing] = useState(''); // Define foodForReversePairing state
+    const [foodForReversePairing, setFoodForReversePairing] = useState(''); 
 
 
     // Combined global error for display (prioritizing order)
@@ -186,14 +186,14 @@ function App() {
         const wine = wines.find(w => w.id === wineId);
         setWineToExperience(wine);
         setShowExperienceWineModal(true);
-    }, [wines]); // Depend on wines to find the correct object
+    }, [wines]); 
 
     const handleOpenFoodPairing = useCallback((wine) => { 
         setSelectedWineForPairing(wine); 
-        setFoodPairingSuggestion(''); // Clear previous AI suggestion
-        setFoodPairingError(null); // Clear any previous AI error
+        setFoodPairingSuggestionState(''); // Use the renamed state setter
+        setFoodPairingError(null); 
         setShowFoodPairingModal(true); 
-    }, [setFoodPairingSuggestion, setFoodPairingError]); // Added setters to dependency array
+    }, [setFoodPairingSuggestionState, setFoodPairingError]); 
 
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
@@ -549,7 +549,7 @@ function App() {
                         {currentView === 'foodPairing' && (
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
-                                setFoodForReversePairing={setFoodForReversePairing} // Pass the correct setter for foodForReversePairing
+                                setFoodForReversePairing={setFoodForReversePairing} // Corrected this line to use setFoodForReversePairing
                                 handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
