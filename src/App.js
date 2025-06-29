@@ -123,7 +123,11 @@ function App() {
     const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
     const { authError, isLoadingAuth, login, register, logout, performInitialAuth } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined);
     
-    // Pass setGlobalError to hooks for consistent global error reporting
+    // Wrapped setGlobalError in useCallback for stability when passing to hooks
+    const setGlobalErrorCallback = useCallback((msg) => {
+        setGlobalError(msg);
+    }, []);
+
     const { 
         handleAddWine, 
         handleUpdateWine, 
@@ -132,7 +136,7 @@ function App() {
         handleEraseAllWines, 
         isLoadingAction, 
         actionError: wineActionError 
-    } = useWineActions(db, userId, appId, setGlobalError); 
+    } = useWineActions(db, userId, appId, setGlobalErrorCallback); 
 
     const { 
         foodPairingSuggestion, 
@@ -140,8 +144,9 @@ function App() {
         pairingError, 
         fetchFoodPairing, 
         findWineForFood,
+        setFoodPairingSuggestion, // Make sure setFoodPairingSuggestion is destructured here
         setPairingError // Destructure and keep original name for local use in FoodPairingAI
-    } = useFoodPairingAI(setGlobalError); // Pass setGlobalError to AI hook
+    } = useFoodPairingAI(setGlobalErrorCallback); // Pass setGlobalError to AI hook
 
 
     // --- Local UI State (Managed within App.js) ---
@@ -162,6 +167,7 @@ function App() {
     const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
     const [wineToDelete, setWineToDelete] = useState(null); 
+    const [foodForReversePairing, setFoodForReversePairing] = useState(''); // Define foodForReversePairing state
 
 
     // Combined global error for display (prioritizing order)
@@ -187,7 +193,7 @@ function App() {
         setFoodPairingSuggestion(''); // Clear previous AI suggestion
         setFoodPairingError(null); // Clear any previous AI error
         setShowFoodPairingModal(true); 
-    }, []);
+    }, [setFoodPairingSuggestion, setFoodPairingError]); // Added setters to dependency array
 
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
@@ -195,22 +201,21 @@ function App() {
         setShowDeleteConfirmModal(true);
     }, [wines]);
 
-    const handleActualDeleteWinePermanently = useCallback(async () => { // Renamed to avoid confusion
+    const handleActualDeleteWinePermanently = useCallback(async () => { 
         if (!wineToDelete) return;
-        await handleDeleteWinePermanently(wineToDelete.id); // Call action from hook
+        await handleDeleteWinePermanently(wineToDelete.id); 
         setShowDeleteConfirmModal(false);
         setWineToDelete(null);
-        // Data update will happen via onSnapshot in useFirebaseData
     }, [wineToDelete, handleDeleteWinePermanently]);
 
 
     const confirmEraseAllWines = useCallback(() => {
         if (wines.length === 0) {
-            setGlobalError("Your cellar is already empty!"); // Use setGlobalError
+            setGlobalError("Your cellar is already empty!"); 
             return;
         }
         setShowEraseAllConfirmModal(true);
-    }, [wines, setGlobalError]); // Depend on wines and setGlobalError
+    }, [wines, setGlobalError]); 
 
 
     // CSV Handlers from useCase/App.js scope
@@ -224,7 +229,7 @@ function App() {
             setCsvImportStatus({ message: 'Please select a CSV file first.', type: 'error', errors: [] });
             return;
         }
-        if (!db || !userId) { // Ensure db and userId are available
+        if (!db || !userId) { 
             setCsvImportStatus({ message: 'Database not ready or user not logged in.', type: 'error', errors: [] });
             return;
         }
@@ -235,7 +240,7 @@ function App() {
         const reader = new FileReader();
         reader.onload = async (event) => { 
             const csvText = event.target.result;
-            const { headers, data: parsedData } = parseCsv(csvText); // Use parsedCsv from utils
+            const { headers, data: parsedData } = parseCsv(csvText); 
             
             const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location', 'drinkingwindowstartyear', 'drinkingwindowendyear'];
             const requiredHeaders = ['producer', 'year', 'region', 'color', 'location'];
@@ -269,6 +274,7 @@ function App() {
                     drinkingWindowEndYear: row.drinkingwindowendyear ? parseInt(row.drinkingwindowendyear, 10) : null,     
                 };
 
+                // Basic validation
                 if (!wineData.producer || !wineData.region || !wineData.color || !wineData.location) {
                     importErrors.push(`Row ${i + 2}: Missing required fields (Producer, Region, Color, Location). Skipped.`);
                     continue;
@@ -289,6 +295,7 @@ function App() {
                     importErrors.push(`Row ${i + 2}: Drinking Window Start Year (${wineData.drinkingWindowStartYear}) cannot be after End Year (${wineData.drinkingWindowEndYear}). Skipped.`);
                     continue;
                 }
+
 
                 const trimmedLocation = wineData.location.trim().toLowerCase();
                 if (currentCellarLocations.includes(trimmedLocation) || locationsInCsv.has(trimmedLocation)) {
@@ -542,7 +549,7 @@ function App() {
                         {currentView === 'foodPairing' && (
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
-                                setFoodForReversePairing={setSearchTerm} // Corrected: Use setSearchTerm from App for consistency, or define a specific state for this in FoodPairingView
+                                setFoodForReversePairing={setFoodForReversePairing} // Pass the correct setter for foodForReversePairing
                                 handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
@@ -591,7 +598,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => { if(wineToDelete) handleActualDeleteWinePermanently(); }} // Call handler from App.js scope
+                            onClick={() => { if(wineToDelete) handleActualDeleteWinePermanently(); }} 
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
@@ -643,7 +650,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => { if(experiencedWineToDelete) handleDeleteExperiencedWine(experiencedWineToDelete.id); }} // Call handler from App.js scope
+                            onClick={() => { if(experiencedWineToDelete) handleDeleteExperiencedWine(experiencedWineToDelete.id); }} 
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
