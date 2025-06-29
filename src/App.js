@@ -116,9 +116,14 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cella
 
 
 function App() {
+    // --- Global Error State ---
+    const [globalError, setGlobalError] = useState(null); // Renamed error to globalError to avoid conflicts
+
     // --- Data and Auth Hooks ---
     const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
     const { authError, isLoadingAuth, login, register, logout, performInitialAuth } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined);
+    
+    // Pass setGlobalError to hooks for consistent global error reporting
     const { 
         handleAddWine, 
         handleUpdateWine, 
@@ -127,7 +132,7 @@ function App() {
         handleEraseAllWines, 
         isLoadingAction, 
         actionError: wineActionError 
-    } = useWineActions(db, userId, appId, setError); // Pass setError from App for global messages
+    } = useWineActions(db, userId, appId, setGlobalError); 
 
     const { 
         foodPairingSuggestion, 
@@ -135,8 +140,8 @@ function App() {
         pairingError, 
         fetchFoodPairing, 
         findWineForFood,
-        setPairingError: setFoodPairingError // Destructure and rename to avoid conflict with global setError
-    } = useFoodPairingAI(setError); // Pass setError for global messages
+        setPairingError // Destructure and keep original name for local use in FoodPairingAI
+    } = useFoodPairingAI(setGlobalError); // Pass setGlobalError to AI hook
 
 
     // --- Local UI State (Managed within App.js) ---
@@ -156,18 +161,59 @@ function App() {
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
     const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
-    const [wineToDelete, setWineToDelete] = useState(null); // Define wineToDelete state explicitly
+    const [wineToDelete, setWineToDelete] = useState(null); 
 
 
-    // Combine all errors into a single state for global display
-    const currentGlobalError = useMemo(() => {
-        // Only show one error at a time, prioritizing data, then auth, then wine actions, then pairing
-        return dataError || authError || wineActionError || pairingError;
-    }, [dataError, authError, wineActionError, pairingError]);
+    // Combined global error for display (prioritizing order)
+    const currentDisplayError = useMemo(() => {
+        return globalError || dataError || authError || wineActionError || pairingError;
+    }, [globalError, dataError, authError, wineActionError, pairingError]);
 
 
-    // --- Handlers from Hooks / Utilities ---
-    // CSV Handlers
+    // --- Handlers for Modals / Actions defined in App.js ---
+    const handleOpenWineForm = useCallback((wine = null) => { 
+        setCurrentWineToEdit(wine); 
+        setShowWineFormModal(true); 
+    }, []);
+
+    const confirmExperienceWine = useCallback((wineId) => {
+        const wine = wines.find(w => w.id === wineId);
+        setWineToExperience(wine);
+        setShowExperienceWineModal(true);
+    }, [wines]); // Depend on wines to find the correct object
+
+    const handleOpenFoodPairing = useCallback((wine) => { 
+        setSelectedWineForPairing(wine); 
+        setFoodPairingSuggestion(''); // Clear previous AI suggestion
+        setFoodPairingError(null); // Clear any previous AI error
+        setShowFoodPairingModal(true); 
+    }, []);
+
+    const confirmDeleteWinePermanently = useCallback((wineId) => { 
+        const wine = wines.find(w => w.id === wineId);
+        setWineToDelete(wine);
+        setShowDeleteConfirmModal(true);
+    }, [wines]);
+
+    const handleActualDeleteWinePermanently = useCallback(async () => { // Renamed to avoid confusion
+        if (!wineToDelete) return;
+        await handleDeleteWinePermanently(wineToDelete.id); // Call action from hook
+        setShowDeleteConfirmModal(false);
+        setWineToDelete(null);
+        // Data update will happen via onSnapshot in useFirebaseData
+    }, [wineToDelete, handleDeleteWinePermanently]);
+
+
+    const confirmEraseAllWines = useCallback(() => {
+        if (wines.length === 0) {
+            setGlobalError("Your cellar is already empty!"); // Use setGlobalError
+            return;
+        }
+        setShowEraseAllConfirmModal(true);
+    }, [wines, setGlobalError]); // Depend on wines and setGlobalError
+
+
+    // CSV Handlers from useCase/App.js scope
     const handleCsvFileChange = useCallback((event) => {
         setCsvFile(event.target.files[0]);
         setCsvImportStatus({ message: '', type: '', errors: [] }); 
@@ -178,7 +224,7 @@ function App() {
             setCsvImportStatus({ message: 'Please select a CSV file first.', type: 'error', errors: [] });
             return;
         }
-        if (!db || !userId) {
+        if (!db || !userId) { // Ensure db and userId are available
             setCsvImportStatus({ message: 'Database not ready or user not logged in.', type: 'error', errors: [] });
             return;
         }
@@ -189,7 +235,7 @@ function App() {
         const reader = new FileReader();
         reader.onload = async (event) => { 
             const csvText = event.target.result;
-            const { headers, data: parsedData } = parseCsv(csvText);
+            const { headers, data: parsedData } = parseCsv(csvText); // Use parsedCsv from utils
             
             const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location', 'drinkingwindowstartyear', 'drinkingwindowendyear'];
             const requiredHeaders = ['producer', 'year', 'region', 'color', 'location'];
@@ -207,7 +253,6 @@ function App() {
 
             const winesToImport = [];
             const importErrors = [];
-            // Get current locations to check for duplicates
             const currentCellarLocations = wines.map(w => w.location.trim().toLowerCase());
             const locationsInCsv = new Set(); 
 
@@ -224,7 +269,6 @@ function App() {
                     drinkingWindowEndYear: row.drinkingwindowendyear ? parseInt(row.drinkingwindowendyear, 10) : null,     
                 };
 
-                // Basic validation
                 if (!wineData.producer || !wineData.region || !wineData.color || !wineData.location) {
                     importErrors.push(`Row ${i + 2}: Missing required fields (Producer, Region, Color, Location). Skipped.`);
                     continue;
@@ -245,7 +289,6 @@ function App() {
                     importErrors.push(`Row ${i + 2}: Drinking Window Start Year (${wineData.drinkingWindowStartYear}) cannot be after End Year (${wineData.drinkingWindowEndYear}). Skipped.`);
                     continue;
                 }
-
 
                 const trimmedLocation = wineData.location.trim().toLowerCase();
                 if (currentCellarLocations.includes(trimmedLocation) || locationsInCsv.has(trimmedLocation)) {
@@ -303,12 +346,12 @@ function App() {
 
     const exportCurrentCellar = useCallback(() => {
         exportToCsv(wines, 'my_wine_cellar', null, false);
-        setError(null); // Clear any previous errors
+        setGlobalError(null); 
     }, [wines]);
 
     const exportExperiencedWines = useCallback(() => {
         exportToCsv(experiencedWines, 'my_experienced_wine_cellar', null, true);
-        setError(null); // Clear any previous errors
+        setGlobalError(null); 
     }, [experiencedWines]);
 
 
@@ -332,7 +375,7 @@ function App() {
     if (dataError) { 
          return (
             <div className="flex flex-col justify-center items-center min-h-screen bg-slate-100 dark:bg-slate-900 p-4">
-                <AlertMessage message={dataError} type="error" onDismiss={() => setError(null)} />
+                <AlertMessage message={dataError} type="error" onDismiss={() => setGlobalError(null)} />
                 <p className="text-slate-600 dark:text-slate-400 mt-2">Please ensure the application is correctly configured and Firebase is reachable.</p>
             </div>
         );
@@ -378,11 +421,11 @@ function App() {
                     )}
                 </div>
                  {/* Display global errors */}
-                 {currentGlobalError && <AlertMessage message={currentGlobalError} type="error" onDismiss={() => { setError(null); setFoodPairingError(null); }} />}
+                 {currentDisplayError && <AlertMessage message={currentDisplayError} type="error" onDismiss={() => { setGlobalError(null); setFoodPairingError(null); }} />}
             </header>
 
             <main className="container mx-auto">
-                {!user && isAuthReady && !currentGlobalError && (
+                {!user && isAuthReady && !currentDisplayError && (
                      <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-lg shadow">
                         <p className="text-lg mb-4">Please Login or Register to manage your wine cellar.</p>
                         <div className="flex justify-center items-center space-x-3 mt-4">
@@ -548,7 +591,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => handleDeleteWinePermanently(wineToDelete.id)} // Pass ID to the handler
+                            onClick={() => { if(wineToDelete) handleActualDeleteWinePermanently(); }} // Call handler from App.js scope
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
@@ -600,7 +643,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => handleDeleteExperiencedWine(experiencedWineToDelete.id)} // Pass ID to the handler
+                            onClick={() => { if(experiencedWineToDelete) handleDeleteExperiencedWine(experiencedWineToDelete.id); }} // Call handler from App.js scope
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
@@ -614,7 +657,7 @@ function App() {
                     isRegister={false}
                     auth={auth} 
                     onAuthSuccess={() => setShowLoginModal(false)}
-                    setError={(msg) => { setError(msg); setFoodPairingError(null); }} 
+                    setError={(msg) => { setGlobalError(msg); setFoodPairingError(null); }} 
                 />
                 <AuthModal
                     isOpen={showRegisterModal}
@@ -622,7 +665,7 @@ function App() {
                     isRegister={true}
                     auth={auth} 
                     onAuthSuccess={() => setShowRegisterModal(false)}
-                    setError={(msg) => { setError(msg); setFoodPairingError(null); }} 
+                    setError={(msg) => { setGlobalError(msg); setFoodPairingError(null); }} 
                 />
             </main>
             <footer className="text-center mt-12 py-4 border-t border-slate-200 dark:border-slate-700">
