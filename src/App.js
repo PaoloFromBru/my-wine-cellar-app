@@ -101,18 +101,8 @@ const CheckCircleIcon = ({className="w-5 h-5"}) => (
 
 
 // --- Firebase Config ---
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCE3XzbBO96yY2uRdK2zuwnWSKjF4SnvSw",
-  authDomain: "mypublicwinecellar.firebaseapp.com",
-  projectId: "mypublicwinecellar",
-  storageBucket: "mypublicwinecellar.firebasestorage.app",
-  messagingSenderId: "554888373269",
-  appId: "1:554888373269:web:aa83e35df32658acae5a1c",
-  measurementId: "G-EVTT48644N"
-};
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cellar-data';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wine-cellar-app-v3';
 
 
 function App() {
@@ -190,10 +180,10 @@ function App() {
 
     const handleOpenFoodPairing = useCallback((wine) => { 
         setSelectedWineForPairing(wine); 
-        setFoodPairingSuggestionState(''); // Use the renamed state setter
-        setFoodPairingError(null); 
+        setFoodPairingSuggestionState(''); 
+        setPairingError(null); 
         setShowFoodPairingModal(true); 
-    }, [setFoodPairingSuggestionState, setFoodPairingError]); 
+    }, [setFoodPairingSuggestionState, setPairingError]); 
 
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
@@ -549,7 +539,7 @@ function App() {
                         {currentView === 'foodPairing' && (
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
-                                setFoodForReversePairing={setFoodForReversePairing} // Corrected this line to use setFoodForReversePairing
+                                setFoodForReversePairing={setFoodForReversePairing} 
                                 handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
