@@ -101,8 +101,18 @@ const CheckCircleIcon = ({className="w-5 h-5"}) => (
 
 
 // --- Firebase Config ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wine-cellar-app-v3';
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCE3XzbBO96yY2uRdK2zuwnWSKjF4SnvSw",
+  authDomain: "mypublicwinecellar.firebaseapp.com",
+  projectId: "mypublicwinecellar",
+  storageBucket: "mypublicwinecellar.firebasestorage.app",
+  messagingSenderId: "554888373269",
+  appId: "1:554888373269:web:aa83e35df32658acae5a1c",
+  measurementId: "G-EVTT48644N"
+};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cellar-data';
 
 
 function App() {
@@ -135,7 +145,7 @@ function App() {
         fetchFoodPairing, 
         findWineForFood,
         setFoodPairingSuggestion: setFoodPairingSuggestionState, // Renamed to avoid conflict
-        setPairingError // Destructure and keep original name for local use in FoodPairingAI
+        setPairingError: setFoodPairingError // Renamed to avoid conflict with global setError
     } = useFoodPairingAI(setGlobalErrorCallback); 
 
 
@@ -181,22 +191,22 @@ function App() {
     const handleOpenFoodPairing = useCallback((wine) => { 
         setSelectedWineForPairing(wine); 
         setFoodPairingSuggestionState(''); 
-        setPairingError(null); 
+        setFoodPairingError(null); 
         setShowFoodPairingModal(true); 
-    }, [setFoodPairingSuggestionState, setPairingError]); 
+    }, [setFoodPairingSuggestionState, setFoodPairingError]); 
 
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
         setWineToDelete(wine);
         setShowDeleteConfirmModal(true);
-    }, [wines]);
+    }, [wines, setShowDeleteConfirmModal]); // Added setShowDeleteConfirmModal to dependencies
 
     const handleActualDeleteWinePermanently = useCallback(async () => { 
         if (!wineToDelete) return;
         await handleDeleteWinePermanently(wineToDelete.id); 
         setShowDeleteConfirmModal(false);
         setWineToDelete(null);
-    }, [wineToDelete, handleDeleteWinePermanently]);
+    }, [wineToDelete, handleDeleteWinePermanently, setShowDeleteConfirmModal]); // Added setShowDeleteConfirmModal to dependencies
 
 
     const confirmEraseAllWines = useCallback(() => {
@@ -205,7 +215,7 @@ function App() {
             return;
         }
         setShowEraseAllConfirmModal(true);
-    }, [wines, setGlobalError]); 
+    }, [wines, setGlobalError, setShowEraseAllConfirmModal]); // Added setShowEraseAllConfirmModal to dependencies
 
 
     // CSV Handlers from useCase/App.js scope
@@ -248,6 +258,7 @@ function App() {
 
             const winesToImport = [];
             const importErrors = [];
+            // Get current locations to check for duplicates
             const currentCellarLocations = wines.map(w => w.location.trim().toLowerCase());
             const locationsInCsv = new Set(); 
 
@@ -418,7 +429,7 @@ function App() {
                     )}
                 </div>
                  {/* Display global errors */}
-                 {currentDisplayError && <AlertMessage message={currentDisplayError} type="error" onDismiss={() => { setGlobalError(null); setFoodPairingError(null); }} />}
+                 {currentDisplayError && <AlertMessage message={currentDisplayError} type="error" onDismiss={() => { setGlobalError(null); if (setFoodPairingError) setFoodPairingError(null); }} />}
             </header>
 
             <main className="container mx-auto">
