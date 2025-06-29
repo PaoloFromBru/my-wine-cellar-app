@@ -139,7 +139,7 @@ function App() {
     } = useFoodPairingAI(setError); // Pass setError for global messages
 
 
-    // --- Local UI State ---
+    // --- Local UI State (Managed within App.js) ---
     const [searchTerm, setSearchTerm] = useState('');
     const [showWineFormModal, setShowWineFormModal] = useState(false);
     const [currentWineToEdit, setCurrentWineToEdit] = useState(null);
@@ -156,6 +156,8 @@ function App() {
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
     const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
+    const [wineToDelete, setWineToDelete] = useState(null); // Define wineToDelete state explicitly
+
 
     // Combine all errors into a single state for global display
     const currentGlobalError = useMemo(() => {
@@ -497,7 +499,7 @@ function App() {
                         {currentView === 'foodPairing' && (
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
-                                setFoodForReversePairing={setFoodForReversePairing}
+                                setFoodForReversePairing={setSearchTerm} // Corrected: Use setSearchTerm from App for consistency, or define a specific state for this in FoodPairingView
                                 handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
@@ -546,7 +548,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={handleDeleteWinePermanently}
+                            onClick={() => handleDeleteWinePermanently(wineToDelete.id)} // Pass ID to the handler
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
@@ -598,7 +600,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={handleDeleteExperiencedWine}
+                            onClick={() => handleDeleteExperiencedWine(experiencedWineToDelete.id)} // Pass ID to the handler
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
