@@ -24,22 +24,30 @@ import {
     setLogLevel
 } from 'firebase/firestore';
 
-// Import modularized components
-import Modal from './components/Modal';
-import AlertMessage from './components/AlertMessage';
-import AuthModal from './components/AuthModal';
-import WineFormModal from './components/WineFormModal';
-import FoodPairingModal from './components/FoodPairingModal';
-import ReverseFoodPairingModal from './components/ReverseFoodPairingModal';
-import ExperienceWineModal from './components/ExperienceWineModal'; // Ensure this is correctly imported
+// Import modularized components (with explicit .js extensions)
+import Modal from './components/Modal.js';
+import AlertMessage from './components/AlertMessage.js';
+import AuthModal from './components/AuthModal.js';
+import WineFormModal from './components/WineFormModal.js';
+import FoodPairingModal from './components/FoodPairingModal.js';
+import ReverseFoodPairingModal from './components/ReverseFoodPairingModal.js';
+import ExperienceWineModal from './components/ExperienceWineModal.js';
 
+// Import custom hooks (with explicit .js extensions)
+import { useFirebaseData } from './hooks/useFirebaseData.js';
+import { useAuthManager } from './hooks/useAuthManager.js';
+import { useWineActions } from './hooks/useWineActions.js';
+import { useFoodPairingAI } from './hooks/useFoodPairingAI.js';
 
-// Import new modularized views
-import CellarView from './views/CellarView';
-import DrinkSoonView from './views/DrinkSoonView';
-import FoodPairingView from './views/FoodPairingView';
-import ImportExportView from './views/ImportExportView';
-import ExperiencedWinesView from './views/ExperiencedWinesView';
+// Import CSV utilities (with explicit .js extensions)
+import { parseCsv, exportToCsv } from './utils/csvUtils.js'; 
+
+// Import modularized views (with explicit .js extensions)
+import CellarView from './views/CellarView.js';
+import DrinkSoonView from './views/DrinkSoonView.js';
+import FoodPairingView from './views/FoodPairingView.js';
+import ImportExportView from './views/ImportExportView.js';
+import ExperiencedWinesView from './views/ExperiencedWinesView.js';
 
 
 // --- Icons (kept here as they are small, but can be further modularized) ---
@@ -108,410 +116,61 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cella
 
 
 function App() {
-    const [auth, setAuthInstance] = useState(null); 
-    const [db, setDbInstance] = useState(null); 
-    const [user, setUser] = useState(null);
-    const [userId, setUserId] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(false);
-    const [wines, setWines] = useState([]);
-    const [experiencedWines, setExperiencedWines] = useState([]); 
-    const [isLoadingWines, setIsLoadingWines] = useState(true);
-    const [error, setError] = useState(null);
-    
+    // --- Data and Auth Hooks ---
+    const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
+    const { authError, isLoadingAuth, login, register, logout, performInitialAuth } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined);
+    const { 
+        handleAddWine, 
+        handleUpdateWine, 
+        handleExperienceWine, 
+        handleDeleteExperiencedWine, 
+        handleEraseAllWines, 
+        isLoadingAction, 
+        actionError: wineActionError 
+    } = useWineActions(db, userId, appId, setError); // Pass setError from App for global messages
+
+    const { 
+        foodPairingSuggestion, 
+        isLoadingPairing, 
+        pairingError, 
+        fetchFoodPairing, 
+        findWineForFood,
+        setPairingError
+    } = useFoodPairingAI(setError); // Pass setError for global messages
+
+
+    // --- Local UI State ---
     const [searchTerm, setSearchTerm] = useState('');
-    
     const [showWineFormModal, setShowWineFormModal] = useState(false);
     const [currentWineToEdit, setCurrentWineToEdit] = useState(null);
-
     const [showFoodPairingModal, setShowFoodPairingModal] = useState(false);
     const [selectedWineForPairing, setSelectedWineForPairing] = useState(null);
-    const [foodPairingSuggestion, setFoodPairingSuggestion] = useState('');
-    const [isLoadingPairing, setIsLoadingPairing] = useState(false);
-
-    const [foodForReversePairing, setFoodForReversePairing] = useState('');
-    const [reversePairingResult, setReversePairingResult] = useState('');
-    const [isLoadingReversePairing, setIsLoadingReversePairing] = useState(false);
-    const [showReversePairingModal, setShowReversePairingModal] = useState(false);
-
     const [csvFile, setCsvFile] = useState(null);
     const [isImportingCsv, setIsImportingCsv] = useState(false);
     const [csvImportStatus, setCsvImportStatus] = useState({ message: '', type: '', errors: [] });
-
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showRegisterModal, setShowRegisterModal] = useState(false);
-
     const [currentView, setCurrentView] = useState('myCellar'); 
-
     const [showExperienceWineModal, setShowExperienceWineModal] = useState(false);
     const [wineToExperience, setWineToExperience] = useState(null);
-
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
-
     const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
 
-
-    useEffect(() => {
-        if (Object.keys(firebaseConfig).length === 0) {
-            setError("Firebase configuration is missing. Please contact support.");
-            setIsAuthReady(true); 
-            return;
-        }
-        try {
-            const app = initializeApp(firebaseConfig);
-            const authInstance = getAuth(app);
-            const dbInstance = getFirestore(app);
-            setLogLevel('debug'); 
-
-            setAuthInstance(authInstance);
-            setDbInstance(dbInstance);
-
-            const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser) => {
-                if (firebaseUser) {
-                    setUser(firebaseUser);
-                    setUserId(firebaseUser.uid);
-                    setError(null); 
-                } else {
-                    setUser(null);
-                    setUserId(null);
-                }
-                setIsAuthReady(true);
-            });
-            return () => unsubscribe();
-        } catch (e) {
-            console.error("Error initializing Firebase:", e);
-            setError("Could not initialize Firebase. Some features may not work.");
-            setIsAuthReady(true); 
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!db || !userId || !isAuthReady) {
-            setIsLoadingWines(isAuthReady && (!db || !userId)); 
-            return;
-        }
-        
-        setIsLoadingWines(true);
-        const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
-        const experiencedWinesCollectionPath = `artifacts/${appId}/users/${userId}/experiencedWines`;
-
-        const unsubscribeWines = onSnapshot(query(collection(db, winesCollectionPath)), (querySnapshot) => {
-            const winesData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-            winesData.sort((a, b) => {
-                const producerCompare = (a.producer || "").localeCompare(b.producer || "");
-                if (producerCompare !== 0) return producerCompare;
-                return (a.year || 0) - (b.year || 0);
-            });
-            setWines(winesData);
-            setError(null); 
-        }, (err) => {
-            console.error("Error fetching wines:", err);
-            setError(`Failed to fetch wines: ${err.message}. Check Firestore rules & connectivity.`);
-            setWines([]); 
-        });
-
-        const unsubscribeExperiencedWines = onSnapshot(query(collection(db, experiencedWinesCollectionPath)), (querySnapshot) => {
-            const experiencedWinesData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-            experiencedWinesData.sort((a, b) => {
-                const dateA = a.consumedAt instanceof Timestamp ? a.consumedAt.toDate() : new Date(a.consumedAt);
-                const dateB = b.consumedAt instanceof Timestamp ? b.consumedAt.toDate() : new Date(b.consumedAt);
-                return dateB - dateA; 
-            });
-            setExperiencedWines(experiencedWinesData);
-        }, (err) => {
-            console.error("Error fetching experienced wines:", err);
-            setExperiencedWines([]); 
-        });
-
-        setIsLoadingWines(false);
-        
-        return () => {
-            unsubscribeWines();
-            unsubscribeExperiencedWines();
-        };
-    }, [db, userId, isAuthReady]);
-
-    const handleAddWine = async (wineData) => {
-        if (!db || !userId) { setError("Database not ready or user not logged in."); return; }
-        try {
-            const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
-            await addDoc(collection(db, winesCollectionPath), {
-                ...wineData, 
-                year: wineData.year ? parseInt(wineData.year, 10) : null, 
-                drinkingWindowStartYear: wineData.drinkingWindowStartYear ? parseInt(wineData.drinkingWindowStartYear, 10) : null,
-                drinkingWindowEndYear: wineData.drinkingWindowEndYear ? parseInt(wineData.drinkingWindowEndYear, 10) : null,
-                addedAt: Timestamp.now(),
-            });
-            setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null); 
-        } catch (err) { console.error("Error adding wine:", err); setError(`Failed to add wine: ${err.message}`); }
-    };
-
-    const handleUpdateWine = async (wineIdToUpdate, wineData) => { 
-        if (!db || !userId) { setError("Database not ready or user not logged in."); return; }
-        try {
-            const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineIdToUpdate);
-            await updateDoc(wineDocRef, { 
-                ...wineData, 
-                year: wineData.year ? parseInt(wineData.year, 10) : null,
-                drinkingWindowStartYear: wineData.drinkingWindowStartYear ? parseInt(wineData.drinkingWindowStartYear, 10) : null,
-                drinkingWindowEndYear: wineData.drinkingWindowEndYear ? parseInt(wineData.drinkingWindowEndYear, 10) : null,
-            });
-            setShowWineFormModal(false); setCurrentWineToEdit(null); setError(null);
-        } catch (err) { console.error("Error updating wine:", err); setError(`Failed to update wine: ${err.message}`); }
-    };
-
-    const handleExperienceWine = async (wineId, notes, rating, consumedDate) => {
-        if (!db || !userId) { setError("Database not ready or user not logged in."); return; }
-        const wineToMove = wines.find(w => w.id === wineId);
-        if (!wineToMove) {
-            setError("Wine not found in current cellar to experience.");
-            return;
-        }
-
-        try {
-            const batch = writeBatch(db);
-            const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineId);
-            const experiencedWineCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/experiencedWines`);
-            
-            await addDoc(experiencedWineCollectionRef, {
-                ...wineToMove,
-                tastingNotes: notes,
-                rating: rating,
-                consumedAt: consumedDate ? Timestamp.fromDate(new Date(consumedDate)) : Timestamp.now(),
-                experiencedAt: Timestamp.now(), 
-            });
-
-            await deleteDoc(wineDocRef);
-
-            setError(null);
-            setShowExperienceWineModal(false);
-            setWineToExperience(null);
-        } catch (err) {
-            console.error("Error experiencing wine:", err);
-            setError(`Failed to experience wine: ${err.message}`);
-        }
-    };
-
-    const confirmExperienceWine = (wineId) => {
-        const wine = wines.find(w => w.id === wineId);
-        setWineToExperience(wine);
-        setShowExperienceWineModal(true);
-    };
-
-    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-    const [wineToDelete, setWineToDelete] = useState(null);
-
-    const confirmDeleteWinePermanently = (wineId) => { 
-        const wine = wines.find(w => w.id === wineId);
-        setWineToDelete(wine);
-        setShowDeleteConfirmModal(true);
-    };
-
-    const handleDeleteWinePermanently = async () => { 
-        if (!db || !userId || !wineToDelete) {
-            setError("Database error or no wine selected for deletion.");
-            setShowDeleteConfirmModal(false); return;
-        }
-        try {
-            const wineDocRef = doc(db, `artifacts/${appId}/users/${userId}/wines`, wineToDelete.id);
-            await deleteDoc(wineDocRef);
-            setError(null); setShowDeleteConfirmModal(false); setWineToDelete(null);
-        } catch (err) { console.error("Error deleting wine:", err); setError(`Failed to delete wine: ${err.message}`); setShowDeleteConfirmModal(false); }
-    };
-
-    const confirmDeleteExperiencedWine = (wineId) => {
-        const wine = experiencedWines.find(w => w.id === wineId);
-        setExperiencedWineToDelete(wine);
-        setShowDeleteExperiencedConfirmModal(true);
-    };
-
-    const handleDeleteExperiencedWine = async () => {
-        if (!db || !userId || !experiencedWineToDelete) {
-            setError("Database error or no experienced wine selected for deletion.");
-            setShowDeleteExperiencedConfirmModal(false);
-            return;
-        }
-        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineToDelete.id); 
-        try {
-            const experiencedWineCollectionPath = `artifacts/${appId}/users/${userId}/experiencedWines`; 
-            const experiencedWineDocRef = doc(db, experiencedWineCollectionPath, experiencedWineToDelete.id);
-            await deleteDoc(experiencedWineDocRef);
-            console.log("DEBUG: Experienced wine successfully deleted from Firestore:", experiencedWineToDelete.id); 
-            setError(null); 
-            setShowDeleteExperiencedConfirmModal(false); 
-            setExperiencedWineToDelete(null);
-        } catch (err) {
-            console.error("DEBUG: Error deleting experienced wine from Firestore:", err.code, err.message); 
-            setError(`Failed to delete experienced wine: ${err.message}. Check browser console for details (Code: ${err.code}).`);
-            setShowDeleteExperiencedConfirmModal(false);
-        }
-    };
+    // Combine all errors into a single state for global display
+    const currentGlobalError = useMemo(() => {
+        return dataError || authError || wineActionError || pairingError;
+    }, [dataError, authError, wineActionError, pairingError]);
 
 
-    const handleOpenWineForm = (wine = null) => { setCurrentWineToEdit(wine); setShowWineFormModal(true); };
-    const handleOpenFoodPairing = (wine) => { setSelectedWineForPairing(wine); setFoodPairingSuggestion(''); setShowFoodPairingModal(true); };
-
-    const fetchFoodPairing = async () => {
-        if (!selectedWineForPairing) return;
-        setIsLoadingPairing(true);
-        setError(null);
-
-        const { producer, year, region, color, name } = selectedWineForPairing;
-        const wineDescription = `${name ? name + " " : ""}${producer} ${color} wine from ${region}, year ${year || 'N/A'}`;
-        const prompt = `Suggest a specific food pairing for the following wine: ${wineDescription}. Provide a concise suggestion (1-2 sentences).`;
-
-        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-        const payload = { contents: chatHistory };
-        const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-            }
-            const result = await response.json();
-
-            if (result.candidates && result.candidates.length > 0 &&
-                result.candidates[0].content && result.candidates[0].content.parts &&
-                result.candidates[0].content.parts.length > 0) {
-                const text = result.candidates[0].content.parts[0].text;
-                setFoodPairingSuggestion(text);
-            } else {
-                setFoodPairingSuggestion("Could not retrieve a pairing suggestion at this time (unexpected AI response).");
-            }
-        } catch (err) {
-            console.error("Error fetching food pairing:", err);
-            setError(prevError => prevError || `Food pairing suggestion failed: ${err.message}`);
-            setFoodPairingSuggestion(`Failed to get suggestion: ${err.message}`);
-        } finally {
-            setIsLoadingPairing(false);
-        }
-    };
-
-    const handleFindWineForFood = async () => {
-        if (!foodForReversePairing.trim()) {
-            setError("Please enter a food item to find a wine pairing.");
-            return;
-        }
-        if (wines.length === 0) {
-            setError("Your cellar is empty. Add some wines first to find a pairing.");
-            return;
-        }
-
-        setIsLoadingReversePairing(true);
-        setError(null);
-        setReversePairingResult('');
-
-        const wineListForPrompt = wines.map((wine, index) => 
-            `${index + 1}. Name: ${wine.name || 'N/A'}, Producer: ${wine.producer}, Color: ${wine.color}, Region: ${wine.region}, Year: ${wine.year || 'N/A'}`
-        ).join('\n');
-
-        const prompt = `I want to eat "${foodForReversePairing}". From the following list of wines in my cellar, which one would be the BEST match? Also, list up to two other good alternatives if any. For each suggested wine, briefly explain your choice. If no wines are a good match, please state that.
-My wines are:
-${wineListForPrompt}`;
-        
-        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-        const payload = { contents: chatHistory };
-        const apiKey = process.env.REACT_APP_GEMINI_API_KEY || ""; 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-            }
-            const result = await response.json();
-
-            if (result.candidates && result.candidates.length > 0 &&
-                result.candidates[0].content && result.candidates[0].content.parts &&
-                result.candidates[0].content.parts.length > 0) {
-                const text = result.candidates[0].content.parts[0].text;
-                setReversePairingResult(text);
-            } else {
-                setReversePairingResult("Could not get a wine suggestion at this time (unexpected AI response).");
-            }
-        } catch (err) {
-            console.error("Error finding wine for food:", err);
-            setError(prevError => prevError || `Finding wine for food failed: ${err.message}`);
-            setReversePairingResult(`Failed to get suggestion: ${err.message}`);
-        } finally {
-            setIsLoadingReversePairing(false);
-            setShowReversePairingModal(true);
-        }
-    };
-
-
-    const handleLogout = async () => {
-        if (auth) {
-            try { await signOut(auth); setUser(null); setUserId(null); setWines([]); setExperiencedWines([]); } 
-            catch (e) { console.error("Logout failed: ", e); setError("Logout failed. Please try again."); }
-        }
-    };
-    
-    // --- CSV IMPORT LOGIC ---
-    const handleCsvFileChange = (event) => {
+    // --- Handlers from Hooks / Utilities ---
+    // CSV Handlers
+    const handleCsvFileChange = useCallback((event) => {
         setCsvFile(event.target.files[0]);
         setCsvImportStatus({ message: '', type: '', errors: [] }); 
-    };
+    }, []);
 
-    const parseCsv = (csvText) => {
-        // Remove Byte Order Mark (BOM) if present
-        if (csvText.charCodeAt(0) === 0xFEFF) {
-            csvText = csvText.substring(1);
-        }
-
-        const lines = csvText.split(/\r\n|\n/); 
-        if (lines.length < 2) return { headers: [], data: [] }; 
-
-        // Modified parseLine to handle semicolon delimiter
-        const parseLine = (line) => {
-            const result = [];
-            let currentField = '';
-            let inQuotes = false;
-            // Iterate through the line character by character
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') { // Handle quotes for fields containing delimiters
-                    inQuotes = !inQuotes;
-                } else if (char === ';' && !inQuotes) { // Use semicolon as delimiter
-                    result.push(currentField.trim());
-                    currentField = '';
-                } else {
-                    currentField += char;
-                }
-            }
-            result.push(currentField.trim()); // Add the last field
-            return result;
-        };
-        
-        const headers = parseLine(lines[0]).map(h => h.toLowerCase().trim());
-        const data = [];
-
-        for (let i = 1; i < lines.length; i++) { 
-            if (lines[i].trim() === '') continue; 
-            const values = parseLine(lines[i]);
-            const rowObject = {};
-            headers.forEach((header, index) => {
-                rowObject[header] = values[index] ? values[index].trim() : ''; 
-            });
-            data.push(rowObject);
-        }
-        return { headers, data };
-    };
-
-
-    const handleImportCsv = async () => {
+    const importCsvData = useCallback(async () => {
         if (!csvFile) {
             setCsvImportStatus({ message: 'Please select a CSV file first.', type: 'error', errors: [] });
             return;
@@ -529,8 +188,8 @@ ${wineListForPrompt}`;
             const csvText = event.target.result;
             const { headers, data: parsedData } = parseCsv(csvText);
             
-            const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location', 'drinkingwindowstartyear', 'drinkingwindowendyear']; 
-            const requiredHeaders = ['producer', 'year', 'region', 'color', 'location']; 
+            const expectedHeaders = ['name', 'producer', 'year', 'region', 'color', 'location', 'drinkingwindowstartyear', 'drinkingwindowendyear'];
+            const requiredHeaders = ['producer', 'year', 'region', 'color', 'location'];
             const missingHeaders = requiredHeaders.filter(eh => !headers.includes(eh));
             
             if (missingHeaders.length > 0) {
@@ -545,6 +204,7 @@ ${wineListForPrompt}`;
 
             const winesToImport = [];
             const importErrors = [];
+            // Get current locations to check for duplicates
             const currentCellarLocations = wines.map(w => w.location.trim().toLowerCase());
             const locationsInCsv = new Set(); 
 
@@ -561,6 +221,7 @@ ${wineListForPrompt}`;
                     drinkingWindowEndYear: row.drinkingwindowendyear ? parseInt(row.drinkingwindowendyear, 10) : null,     
                 };
 
+                // Basic validation
                 if (!wineData.producer || !wineData.region || !wineData.color || !wineData.location) {
                     importErrors.push(`Row ${i + 2}: Missing required fields (Producer, Region, Color, Location). Skipped.`);
                     continue;
@@ -635,208 +296,41 @@ ${wineListForPrompt}`;
             setIsImportingCsv(false);
         };
         reader.readAsText(csvFile);
-    };
+    }, [csvFile, db, userId, appId, wines]); 
 
-    // --- End CSV Import ---
-
-    // --- Export Wines to CSV ---
-    const handleExportCsv = () => {
-        if (wines.length === 0) {
-            setError("No wines in your cellar to export.");
-            return;
-        }
-
-        const headers = ["Name", "Producer", "Year", "Region", "Color", "Location", "DrinkingWindowStartYear", "DrinkingWindowEndYear"];
-        // Escape content with double quotes and handle semicolons
-        const escapeCsvField = (field) => {
-            if (field === null || field === undefined) return '';
-            let value = String(field);
-            if (value.includes(';') || value.includes(',') || value.includes('"') || value.includes('\n')) {
-                return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-        };
-
-        const csvRows = [
-            headers.join(';') // Use semicolon as delimiter
-        ];
-
-        wines.forEach(wine => {
-            const row = [
-                escapeCsvField(wine.name),
-                escapeCsvField(wine.producer),
-                escapeCsvField(wine.year),
-                escapeCsvField(wine.region),
-                escapeCsvField(wine.color),
-                escapeCsvField(wine.location),
-                escapeCsvField(wine.drinkingWindowStartYear),
-                escapeCsvField(wine.drinkingWindowEndYear)
-            ];
-            csvRows.push(row.join(';'));
-        });
-
-        const csvString = csvRows.join('\n');
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `my_wine_cellar_${new Date().toISOString().slice(0,10)}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        setError(null);
-    };
-
-    // --- Export Experienced Wines to CSV (NEW) ---
-    const handleExportExperiencedCsv = () => {
-        if (experiencedWines.length === 0) {
-            setError("No experienced wines to export.");
-            return;
-        }
-
-        const headers = ["Name", "Producer", "Year", "Region", "Color", "Location", "DrinkingWindowStartYear", "DrinkingWindowEndYear", "ConsumedAt", "Rating", "TastingNotes"];
-        // Escape content with double quotes and handle semicolons
-        const escapeCsvField = (field) => {
-            if (field === null || field === undefined) return '';
-            let value = String(field);
-            if (value.includes(';') || value.includes(',') || value.includes('"') || value.includes('\n')) {
-                return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-        };
-
-        const csvRows = [
-            headers.join(';') // Use semicolon as delimiter
-        ];
-
-        experiencedWines.forEach(wine => {
-            const row = [
-                escapeCsvField(wine.name),
-                escapeCsvField(wine.producer),
-                escapeCsvField(wine.year),
-                escapeCsvField(wine.region),
-                escapeCsvField(wine.color),
-                escapeCsvField(wine.location),
-                escapeCsvField(wine.drinkingWindowStartYear),
-                escapeCsvField(wine.drinkingWindowEndYear),
-                escapeCsvField(wine.consumedAt ? (wine.consumedAt instanceof Timestamp ? wine.consumedAt.toDate().toISOString().slice(0, 10) : new Date(wine.consumedAt).toISOString().slice(0, 10)) : ''),
-                escapeCsvField(wine.rating),
-                escapeCsvField(wine.tastingNotes)
-            ];
-            csvRows.push(row.join(';'));
-        });
-
-        const csvString = csvRows.join('\n');
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `my_experienced_wine_cellar_${new Date().toISOString().slice(0,10)}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        setError(null);
-    };
-
-
-    // --- Erase All Wines ---
-    const confirmEraseAllWines = () => {
-        if (wines.length === 0) {
-            setError("Your cellar is already empty!");
-            return;
-        }
-        setShowEraseAllConfirmModal(true);
-    };
-
-    const handleEraseAllWines = async () => {
-        if (!db || !userId) {
-            setError("Database not ready or user not logged in.");
-            setShowEraseAllConfirmModal(false);
-            return;
-        }
-        try {
-            const winesCollectionPath = `artifacts/${appId}/users/${userId}/wines`;
-            const q = query(collection(db, winesCollectionPath));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                setError("Your cellar is already empty!");
-                setShowEraseAllConfirmModal(false);
-                return;
-            }
-
-            const batch = writeBatch(db);
-            querySnapshot.forEach((docSnap) => {
-                batch.delete(doc(db, `artifacts/${appId}/users/${userId}/wines`, docSnap.id));
-            });
-            await batch.commit();
-            
-            setError({message: "All wines have been successfully erased from your cellar.", type: 'success'}); // Use object for success type
-            setShowEraseAllConfirmModal(false);
-        } catch (err) {
-            console.error("Error erasing all wines:", err);
-            setError(`Failed to erase all wines: ${err.message}`);
-            setShowEraseAllConfirmModal(false);
-        }
-    };
-
-
-    const getWinesApproachingEndOfWindow = useCallback(() => {
-        const currentYear = new Date().getFullYear();
-        const winesToConsider = [];
-
-        wines.forEach(wine => {
-            const startYear = wine.drinkingWindowStartYear;
-            const endYear = wine.drinkingWindowEndYear;
-
-            if (startYear && endYear) {
-                // Rule 1: Wine is past its drinking window (endYear < currentYear)
-                if (endYear < currentYear) { 
-                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Window Closed' });
-                }
-                // Rule 2: Wine's drinking window ends THIS YEAR (endYear === currentYear)
-                else if (endYear === currentYear) { 
-                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
-                }
-            }
-        });
-        
-        // Sort: First by drinking status (Closed first, then This Year), then by End Year (earliest first)
-        return winesToConsider.sort((a, b) => {
-            const statusOrder = { 'Drink Window Closed': 1, 'Drink Soon (This Year)': 2 };
-            const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
-            if (statusCompare !== 0) return statusCompare;
-            
-            return (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity);
-        });
+    const exportCurrentCellar = useCallback(() => {
+        exportToCsv(wines, 'my_wine_cellar', null, false);
+        setError(null); // Clear any previous errors
     }, [wines]);
 
-    const winesApproachingEnd = useMemo(() => getWinesApproachingEndOfWindow(), [wines, getWinesApproachingEndOfWindow]);
+    const exportExperiencedWines = useCallback(() => {
+        exportToCsv(experiencedWines, 'my_experienced_wine_cellar', null, true);
+        setError(null); // Clear any previous errors
+    }, [experiencedWines]);
 
 
-    const filteredWines = useMemo(() => {
-        return wines.filter(wine => {
-            const searchTermLower = searchTerm.toLowerCase();
-            return (
-                wine.name?.toLowerCase().includes(searchTermLower) ||
-                wine.producer?.toLowerCase().includes(searchTermLower) ||
-                wine.region?.toLowerCase().includes(searchTermLower) ||
-                wine.color?.toLowerCase().includes(searchTermLower) ||
-                wine.location?.toLowerCase().includes(searchTermLower) ||
-                (wine.year && wine.year.toString().includes(searchTermLower))
-            );
-        });
-    }, [wines, searchTerm]);
+    // --- Call initial auth logic on component mount ---
+    useEffect(() => {
+        if (auth && !user && isAuthReady && !isLoadingAuth) {
+            performInitialAuth();
+        }
+    }, [auth, user, isAuthReady, isLoadingAuth, performInitialAuth]);
 
-    if (!isAuthReady) {
+
+    // --- Render Logic ---
+    if (!isAuthReady || isLoadingData || isLoadingAuth) {
         return (
             <div className="flex justify-center items-center min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200">
-                Loading authentication...
+                Loading application...
             </div>
         );
     }
     
-    if (Object.keys(firebaseConfig).length === 0 && error && !auth) { 
+    if (dataError) { 
          return (
             <div className="flex flex-col justify-center items-center min-h-screen bg-slate-100 dark:bg-slate-900 p-4">
-                <AlertMessage message={error} type="error" onDismiss={() => setError(null)} />
-                <p className="text-slate-600 dark:text-slate-400 mt-2">Please ensure the application is correctly configured.</p>
+                <AlertMessage message={dataError} type="error" onDismiss={() => setError(null)} />
+                <p className="text-slate-600 dark:text-slate-400 mt-2">Please ensure the application is correctly configured and Firebase is reachable.</p>
             </div>
         );
     }
@@ -856,7 +350,7 @@ ${wineListForPrompt}`;
                                 {user.isAnonymous ? `Guest (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)` : (user.email || `User (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)`)}
                             </span>
                             <button
-                                onClick={handleLogout}
+                                onClick={logout} 
                                 className="p-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm flex items-center space-x-1"
                             >
                                 <LogoutIcon className="w-4 h-4" />
@@ -880,11 +374,12 @@ ${wineListForPrompt}`;
                         </div>
                     )}
                 </div>
-                 {error && <AlertMessage message={error} type="error" onDismiss={() => setError(null)} />}
+                 {/* Display global errors */}
+                 {currentGlobalError && <AlertMessage message={currentGlobalError} type="error" onDismiss={() => setError(null) && setPairingError(null)} />}
             </header>
 
             <main className="container mx-auto">
-                {!user && isAuthReady && !error && (
+                {!user && isAuthReady && !currentGlobalError && (
                      <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-lg shadow">
                         <p className="text-lg mb-4">Please Login or Register to manage your wine cellar.</p>
                         <div className="flex justify-center items-center space-x-3 mt-4">
@@ -964,7 +459,7 @@ ${wineListForPrompt}`;
                                 handleOpenWineForm={handleOpenWineForm}
                                 confirmExperienceWine={confirmExperienceWine}
                                 handleOpenFoodPairing={handleOpenFoodPairing}
-                                isLoadingWines={isLoadingWines}
+                                isLoadingWines={isLoadingData} 
                                 user={user}
                             />
                         )}
@@ -1002,10 +497,9 @@ ${wineListForPrompt}`;
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
                                 setFoodForReversePairing={setFoodForReversePairing}
-                                handleFindWineForFood={handleFindWineForFood}
-                                isLoadingReversePairing={isLoadingReversePairing}
+                                handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
+                                isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
-                                handleOpenFoodPairing={handleOpenFoodPairing} 
                             />
                         )}
 
@@ -1013,14 +507,14 @@ ${wineListForPrompt}`;
                             <ImportExportView
                                 csvFile={csvFile}
                                 handleCsvFileChange={handleCsvFileChange}
-                                handleImportCsv={handleImportCsv}
+                                handleImportCsv={importCsvData} 
                                 isImportingCsv={isImportingCsv}
                                 csvImportStatus={csvImportStatus}
-                                handleExportCsv={handleExportCsv}
+                                handleExportCsv={exportCurrentCellar} 
                                 wines={wines}
-                                handleExportExperiencedCsv={handleExportExperiencedCsv}
+                                handleExportExperiencedCsv={exportExperiencedWines} 
                                 experiencedWines={experiencedWines}
-                                confirmEraseAllWines={confirmEraseAllWines}
+                                confirmEraseAllWines={() => setShowEraseAllConfirmModal(true)} 
                             />
                         )}
 
@@ -1034,10 +528,11 @@ ${wineListForPrompt}`;
                 )}
 
                 {/* Modals (remain outside conditional rendering to be accessible from all views) */}
-                <WineFormModal isOpen={showWineFormModal} onClose={() => { setShowWineFormModal(false); setCurrentWineToEdit(null); }} onSubmit={currentWineToEdit ? (data) => handleUpdateWine(currentWineToEdit.id, data) : handleAddWine} wine={currentWineToEdit} allWines={wines} />
-                <FoodPairingModal isOpen={showFoodPairingModal} onClose={() => setShowFoodPairingModal(false)} wine={selectedWineForPairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} onFetchPairing={fetchFoodPairing} />
-                <ReverseFoodPairingModal isOpen={showReversePairingModal} onClose={() => setShowReversePairingModal(false)} foodItem={foodForReversePairing} suggestion={reversePairingResult} isLoading={isLoadingReversePairing} />
+                <WineFormModal isOpen={showWineFormModal} onClose={() => { setShowWineFormModal(false); setCurrentWineToEdit(null); }} onSubmit={currentWineToEdit ? (data) => handleUpdateWine(currentWineToEdit.id, data, wines) : (data) => handleAddWine(data, wines)} wine={currentWineToEdit} allWines={wines} />
+                <FoodPairingModal isOpen={showFoodPairingModal} onClose={() => setShowFoodPairingModal(false)} wine={selectedWineForPairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} onFetchPairing={() => fetchFoodPairing(selectedWineForPairing)} />
+                <ReverseFoodPairingModal isOpen={showReversePairingModal} onClose={() => setShowReversePairingModal(false)} foodItem={foodForReversePairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} />
                 
+                {/* Delete Active Wine Confirmation Modal */}
                 <Modal isOpen={showDeleteConfirmModal} onClose={() => setShowDeleteConfirmModal(false)} title="Confirm Permanent Deletion">
                     <p className="text-slate-700 dark:text-slate-300 mb-4">
                         Are you sure you want to **permanently delete** the wine: <strong className="font-semibold">{wineToDelete?.name || wineToDelete?.producer} ({wineToDelete?.year || 'N/A'})</strong>? This action cannot be undone and it will not be moved to "Experienced Wines".
@@ -1062,9 +557,10 @@ ${wineListForPrompt}`;
                     isOpen={showExperienceWineModal}
                     onClose={() => setShowExperienceWineModal(false)}
                     wine={wineToExperience}
-                    onExperience={handleExperienceWine}
+                    onExperience={(id, notes, rating, date) => handleExperienceWine(id, notes, rating, date, wines)} 
                 />
 
+                {/* Erase All Wines Confirmation Modal */}
                 <Modal isOpen={showEraseAllConfirmModal} onClose={() => setShowEraseAllConfirmModal(false)} title="Confirm Erase All Wines">
                     <p className="text-red-700 dark:text-red-300 mb-4 font-bold">
                         DANGER ZONE: This action will permanently delete ALL wines from your active cellar. This includes any tasting notes and associated data. This cannot be undone.
@@ -1088,6 +584,7 @@ ${wineListForPrompt}`;
                     </div>
                 </Modal>
                 
+                {/* Delete Experienced Wine Confirmation Modal */}
                 <Modal isOpen={showDeleteExperiencedConfirmModal} onClose={() => setShowDeleteExperiencedConfirmModal(false)} title="Confirm Delete Experienced Wine">
                     <p className="text-slate-700 dark:text-slate-300 mb-4">
                         Are you sure you want to **permanently delete** this experienced wine entry: <strong className="font-semibold">{experiencedWineToDelete?.name || experiencedWineToDelete?.producer} ({experiencedWineToDelete?.year || 'N/A'})</strong>? This action cannot be undone.
@@ -1114,15 +611,15 @@ ${wineListForPrompt}`;
                     isRegister={false}
                     auth={auth} 
                     onAuthSuccess={() => setShowLoginModal(false)}
-                    setError={setError}
+                    setError={(msg) => { setError(msg); }} // Removed setAuthError here as useAuthManager already handles it
                 />
                 <AuthModal
                     isOpen={showRegisterModal}
                     onClose={() => setShowRegisterModal(false)}
                     isRegister={true}
                     auth={auth} 
-                    onAuthSuccess={() => setShowLoginModal(false)}
-                    setError={setError}
+                    onAuthSuccess={() => setShowRegisterModal(false)}
+                    setError={(msg) => { setError(msg); }} // Removed setAuthError here as useAuthManager already handles it
                 />
             </main>
             <footer className="text-center mt-12 py-4 border-t border-slate-200 dark:border-slate-700">

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import WineItem from '../components/WineItem'; // Path adjusted for views folder
 
-// --- Icons (local for this component for now, as in App.js) ---
+// --- Icons (local for this component for now, but ideally would be imported from a central Icons.js) ---
 const ClockIcon = ({className="w-5 h-5"}) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
