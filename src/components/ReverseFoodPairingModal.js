@@ -1,5 +1,12 @@
 import React from 'react';
-import Modal from './Modal'; // Import Modal
+import Modal from './Modal.js'; // Import Modal
+
+// --- Icons (local for this component for now) ---
+const SparklesIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L21.75 9 18.937 5.154a4.5 4.5 0 0 0-3.09-3.09L12.75 3l-2.846.813a4.5 4.5 0 0 0-3.09 3.09L6 9l2.846.813a4.5 4.5 0 0 0 3.09 3.09L12.75 12l-.813 2.846a4.5 4.5 0 0 0-3.09 3.09L9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813" />
+    </svg>
+);
 
 const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading }) => {
     return (

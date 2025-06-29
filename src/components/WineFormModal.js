@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Modal from './Modal'; // Import Modal
-import AlertMessage from './AlertMessage'; // Import AlertMessage
+import Modal from './Modal.js'; // Import Modal
+import AlertMessage from './AlertMessage.js'; // Import AlertMessage
 
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => { 
     const [formData, setFormData] = useState({
@@ -50,7 +50,6 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             return;
         }
 
-        // Validate drinking window years
         const startYear = formData.drinkingWindowStartYear ? parseInt(formData.drinkingWindowStartYear, 10) : null;
         const endYear = formData.drinkingWindowEndYear ? parseInt(formData.drinkingWindowEndYear, 10) : null;
 

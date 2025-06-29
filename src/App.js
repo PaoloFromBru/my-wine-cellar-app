@@ -51,77 +51,53 @@ import ExperiencedWinesView from './views/ExperiencedWinesView.js';
 
 
 // --- Icons (kept here for simplicity, but can be further modularized if desired) ---
-const WineBottleIcon = ({ className = "w-6 h-6" }) => {
-    console.log("WineBottleIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7.252 2.262A2.25 2.25 0 0 0 5.254 4.24v11.517a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25V4.24a2.25 2.25 0 0 0-1.998-1.978A2.253 2.253 0 0 0 15 2.25H9c-1.014 0-1.881.676-2.172 1.622a2.24 2.24 0 0 1 .424-1.61ZM9 4.5h6M9 7.5h6m-6 3h6m-3.75 3h.008v.008h-.008V15Z" />
-        </svg>
-    );
-};
+const WineBottleIcon = ({ className = "w-6 h-6" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.252 2.262A2.25 2.25 0 0 0 5.254 4.24v11.517a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25V4.24a2.25 2.25 0 0 0-1.998-1.978A2.253 2.253 0 0 0 15 2.25H9c-1.014 0-1.881.676-2.172 1.622a2.24 2.24 0 0 1 .424-1.61ZM9 4.5h6M9 7.5h6m-6 3h6m-3.75 3h.008v.008h-.008V15Z" />
+    </svg>
+);
 
-const UserIcon = ({className = "w-5 h-5"}) => {
-    console.log("UserIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-        </svg>
-    );
-};
+const UserIcon = ({className = "w-5 h-5"}) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+  </svg>
+);
 
-const LogoutIcon = ({className = "w-5 h-5"}) => {
-    console.log("LogoutIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-        </svg>
-    );
-};
+const LogoutIcon = ({className = "w-5 h-5"}) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+    </svg>
+);
 
-const ClockIcon = ({className="w-5 h-5"}) => {
-    console.log("ClockIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-        </svg>
-    );
-};
+const ClockIcon = ({className="w-5 h-5"}) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
 
-const FoodIcon = ({ className = "w-5 h-5" }) => {
-    console.log("FoodIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-        </svg>
-    );
-};
+const FoodIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+    </svg>
+);
 
-const UploadIcon = ({ className="w-5 h-5" }) => {
-    console.log("UploadIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-        </svg>
-    );
-};
+const UploadIcon = ({ className="w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+    </svg>
+);
 
-const CellarIcon = ({ className = "w-5 h-5" }) => {
-    console.log("CellarIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.75A2.25 2.25 0 0 1 10.5 14h3A2.25 2.25 0 0 1 15.75 16.25V21m-4.5 0H5.625c-.621 0-1.125-.504-1.125-1.125V11.25a9.75 9.75 0 0 1 18 0v8.625c0 .621-.504 1.125-1.125 1.125h-4.5M12 10.5h.008v.008H12V10.5Zm0 3h.008v.008H12V13.5Zm0 3h.008v.008H12V16.5Z" />
-        </svg>
-    );
-};
+const CellarIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.75A2.25 2.25 0 0 1 10.5 14h3A2.25 2.25 0 0 1 15.75 16.25V21m-4.5 0H5.625c-.621 0-1.125-.504-1.125-1.125V11.25a9.75 9.75 0 0 1 18 0v8.625c0 .621-.504 1.125-1.125 1.125h-4.5M12 10.5h.008v.008H12V10.5Zm0 3h.008v.008H12V13.5Zm0 3h.008v.008H12V16.5Z" />
+    </svg>
+);
 
-const CheckCircleIcon = ({className="w-5 h-5"}) => {
-    console.log("CheckCircleIcon rendered"); // Debug log
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-        </svg>
-    );
-};
+const CheckCircleIcon = ({className="w-5 h-5"}) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
 
 
 // --- Firebase Config ---
@@ -159,7 +135,7 @@ function App() {
         pairingError, 
         fetchFoodPairing, 
         findWineForFood,
-        setPairingError
+        setPairingError: setFoodPairingError // Destructure and rename to avoid conflict with global setError
     } = useFoodPairingAI(setError); // Pass setError for global messages
 
 
@@ -183,6 +159,7 @@ function App() {
 
     // Combine all errors into a single state for global display
     const currentGlobalError = useMemo(() => {
+        // Only show one error at a time, prioritizing data, then auth, then wine actions, then pairing
         return dataError || authError || wineActionError || pairingError;
     }, [dataError, authError, wineActionError, pairingError]);
 
@@ -399,7 +376,7 @@ function App() {
                     )}
                 </div>
                  {/* Display global errors */}
-                 {currentGlobalError && <AlertMessage message={currentGlobalError} type="error" onDismiss={() => setError(null) || setPairingError(null)} />}
+                 {currentGlobalError && <AlertMessage message={currentGlobalError} type="error" onDismiss={() => { setError(null); setFoodPairingError(null); }} />}
             </header>
 
             <main className="container mx-auto">
@@ -635,7 +612,7 @@ function App() {
                     isRegister={false}
                     auth={auth} 
                     onAuthSuccess={() => setShowLoginModal(false)}
-                    setError={(msg) => { setError(msg); }} 
+                    setError={(msg) => { setError(msg); setFoodPairingError(null); }} 
                 />
                 <AuthModal
                     isOpen={showRegisterModal}
@@ -643,7 +620,7 @@ function App() {
                     isRegister={true}
                     auth={auth} 
                     onAuthSuccess={() => setShowRegisterModal(false)}
-                    setError={(msg) => { setError(msg); }} 
+                    setError={(msg) => { setError(msg); setFoodPairingError(null); }} 
                 />
             </main>
             <footer className="text-center mt-12 py-4 border-t border-slate-200 dark:border-slate-700">

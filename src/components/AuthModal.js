@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import Modal from './Modal'; // Import Modal
-import AlertMessage from './AlertMessage'; // Import AlertMessage
+import Modal from './Modal.js'; // Import Modal
+import AlertMessage from './AlertMessage.js'; // Import AlertMessage
 
 const AuthModal = ({ isOpen, onClose, isRegister, auth, onAuthSuccess, setError }) => {
     const [email, setEmail] = useState('');

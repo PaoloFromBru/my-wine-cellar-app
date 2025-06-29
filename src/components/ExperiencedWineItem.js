@@ -1,7 +1,7 @@
 import React from 'react';
 import { Timestamp } from 'firebase/firestore';
 
-// --- Icons (local for this component, but ideally would be imported from a central Icons.js) ---
+// --- Icons (local for this component for now, but ideally would be imported from a central Icons.js) ---
 const StarIcon = ({ className = "w-4 h-4" }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.109 5.625.441a.562.562 0 0 1 .322.978l-4.307 3.972 1.282 5.586a.562.562 0 0 1-.84.61l-4.908-2.921-4.908 2.921a.562.562 0 0 1-.84-.61l1.282-5.586-4.307-3.972a.562.562 0 0 1 .322-.978l5.625-.441L11.48 3.499Z" />
