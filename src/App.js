@@ -598,6 +598,7 @@ function App() {
                                 handleExportExperiencedCsv={exportExperiencedWines} 
                                 experiencedWines={experiencedWines}
                                 confirmEraseAllWines={() => setShowEraseAllConfirmModal(true)} 
+                                setCsvImportStatus={setCsvImportStatus} // Pass setCsvImportStatus as prop
                             />
                         )}
 

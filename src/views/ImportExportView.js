@@ -1,3 +1,4 @@
+// src/views/ImportExportView.js
 import React from 'react';
 import AlertMessage from '../components/AlertMessage'; // Import AlertMessage
 
@@ -24,7 +25,8 @@ const ImportExportView = ({
     wines,
     handleExportExperiencedCsv,
     experiencedWines,
-    confirmEraseAllWines
+    confirmEraseAllWines,
+    setCsvImportStatus // Add setCsvImportStatus to props
 }) => {
     return (
         <>
