@@ -22,16 +22,15 @@ export const useWineActions = (db, userId, appId, setError) => {
     const experiencedWinesCollectionPath = `artifacts/${appId}/users/${userId}/experiencedWines`;
 
     const handleAddWine = async (wineData, allWines) => {
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false, error: "Database not ready or user not logged in." }; }
         setIsLoadingAction(true);
         setActionError(null);
         try {
-            // Check for duplicate location before adding
             const isLocationTaken = allWines.some(
                 w => w.location && w.location.trim().toLowerCase() === (wineData.location || '').trim().toLowerCase()
             );
             if (isLocationTaken) {
-                setActionError(`Location "${wineData.location}" is already in use.`);
+                setError(`Location "${wineData.location}" is already in use.`);
                 return { success: false, error: `Location "${wineData.location}" is already in use.` };
             }
 
@@ -45,22 +44,21 @@ export const useWineActions = (db, userId, appId, setError) => {
             return { success: true };
         } catch (err) { 
             console.error("Error adding wine:", err); 
-            setActionError(`Failed to add wine: ${err.message}`); 
+            setError(`Failed to add wine: ${err.message}`); 
             return { success: false, error: err.message };
         } finally { setIsLoadingAction(false); }
     };
 
     const handleUpdateWine = async (wineIdToUpdate, wineData, allWines) => { 
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false, error: "Database not ready or user not logged in." }; }
         setIsLoadingAction(true);
         setActionError(null);
         try {
-            // Check for duplicate location, excluding the current wine being edited
             const isLocationTaken = allWines.some(
                 w => w.id !== wineIdToUpdate && w.location && w.location.trim().toLowerCase() === (wineData.location || '').trim().toLowerCase()
             );
             if (isLocationTaken) {
-                setActionError(`Location "${wineData.location}" is already in use by another wine.`);
+                setError(`Location "${wineData.location}" is already in use by another wine.`);
                 return { success: false, error: `Location "${wineData.location}" is already in use.` };
             }
 
@@ -74,20 +72,19 @@ export const useWineActions = (db, userId, appId, setError) => {
             return { success: true };
         } catch (err) { 
             console.error("Error updating wine:", err); 
-            setActionError(`Failed to update wine: ${err.message}`); 
+            setError(`Failed to update wine: ${err.message}`); 
             return { success: false, error: err.message };
         } finally { setIsLoadingAction(false); }
     };
 
     const handleExperienceWine = async (wineToMoveId, notes, rating, consumedDate, allWines) => { 
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false, error: "Database not ready or user not logged in." }; }
         setIsLoadingAction(true);
         setActionError(null);
 
-        // Find the wine from the local allWines array instead of fetching again
         const wineToMove = allWines.find(w => w.id === wineToMoveId);
         if (!wineToMove) {
-            setActionError("Wine not found in current cellar to experience.");
+            setError("Wine not found in current cellar to experience.");
             return { success: false, error: "Wine not found." };
         }
 
@@ -96,7 +93,6 @@ export const useWineActions = (db, userId, appId, setError) => {
             const wineDocRef = doc(db, winesCollectionPath, wineToMoveId);
             const newExperiencedWineRef = doc(collection(db, experiencedWinesCollectionPath)); 
 
-            // 1. Add to experienced wines collection
             batch.set(newExperiencedWineRef, {
                 ...wineToMove,
                 tastingNotes: notes,
@@ -105,20 +101,19 @@ export const useWineActions = (db, userId, appId, setError) => {
                 experiencedAt: Timestamp.now(),
             });
 
-            // 2. Delete from active wines collection
             batch.delete(wineDocRef);
 
             await batch.commit();
             return { success: true };
         } catch (err) {
             console.error("Error experiencing wine:", err);
-            setActionError(`Failed to experience wine: ${err.message}`);
+            setError(`Failed to experience wine: ${err.message}`);
             return { success: false, error: err.message };
         } finally { setIsLoadingAction(false); }
     };
 
-    const handleDeleteWine = async (wineId) => { // New function added for deleting a single active wine
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+    const handleDeleteWine = async (wineId) => { 
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false }; }
         setIsLoadingAction(true);
         setActionError(null);
         try {
@@ -127,33 +122,34 @@ export const useWineActions = (db, userId, appId, setError) => {
             return { success: true };
         } catch (err) {
             console.error("Error deleting wine:", err);
-            setActionError(`Failed to delete wine: ${err.message}`);
+            setError(`Failed to delete wine: ${err.message}`);
             return { success: false, error: err.message };
-        } finally {
-            setIsLoadingAction(false);
-        }
+        } finally { setIsLoadingAction(false); }
     };
 
-	const handleDeleteExperiencedWine = async (experiencedWineId) => {
-	        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
-	        setIsLoadingAction(true);
-	        setActionError(null);
-	        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineId);
-	        console.log("DEBUG: userId used in handleDeleteExperiencedWine:", userId); // Add this line
-	        try {
-	            const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, experiencedWineId);
-	            await deleteDoc(experiencedWineDocRef);
-	            console.log("DEBUG: Experienced wine successfully deleted from Firestore:", experiencedWineId);
-	            return { success: true };
-	        } catch (err) {
-	            console.error("DEBUG: Error deleting experienced wine from Firestore:", err.code, err.message);
-	            setActionError(`Failed to delete experienced wine: ${err.message}. Check console for details.`);
-	            return { success: false, error: err.message };
-	        } finally { setIsLoadingAction(false); }
-	    };
-		
+    const handleDeleteExperiencedWine = async (experiencedWineId) => {
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false, error: "Database not ready or user not logged in." }; }
+        setIsLoadingAction(true);
+        setActionError(null);
+        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineId);
+        console.log("DEBUG: userId used in handleDeleteExperiencedWine:", userId);
+        const fullDocPath = `artifacts/${appId}/users/${userId}/experiencedWines/${experiencedWineId}`; // Construct full path
+        console.log("DEBUG: Full Firestore document path for deletion:", fullDocPath); // Log the full path
+
+        try {
+            const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, experiencedWineId); 
+            await deleteDoc(experiencedWineDocRef);
+            console.log("DEBUG: Experienced wine successfully deleted from Firestore (client-side acknowledgement):", experiencedWineId);
+            return { success: true };
+        } catch (err) {
+            console.error("DEBUG: ERROR deleting experienced wine from Firestore:", err.code, err.message, err); 
+            setError(`Failed to delete experienced wine: ${err.message}`, 'error');
+            return { success: false, error: err.message };
+        } finally { setIsLoadingAction(false); }
+    };
+
     const handleEraseAllWines = async () => {
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+        if (!db || !userId) { setError("Database not ready or user not logged in."); return { success: false }; }
         setIsLoadingAction(true);
         setActionError(null);
         try {
@@ -161,7 +157,7 @@ export const useWineActions = (db, userId, appId, setError) => {
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
-                setActionError("Your cellar is already empty!");
+                setError("Your cellar is already empty!", 'info');
                 return { success: true, message: "Cellar already empty." };
             }
 
@@ -174,7 +170,7 @@ export const useWineActions = (db, userId, appId, setError) => {
             return { success: true, message: "All wines have been successfully erased from your cellar." };
         } catch (err) {
             console.error("Error erasing all wines:", err);
-            setActionError(`Failed to erase all wines: ${err.message}`);
+            setError(`Failed to erase all wines: ${err.message}`);
             return { success: false, error: err.message };
         } finally { setIsLoadingAction(false); }
     };
@@ -183,7 +179,7 @@ export const useWineActions = (db, userId, appId, setError) => {
         handleAddWine,
         handleUpdateWine,
         handleExperienceWine,
-        handleDeleteWine, // Export the new function
+        handleDeleteWine, 
         handleDeleteExperiencedWine,
         handleEraseAllWines,
         isLoadingAction,
