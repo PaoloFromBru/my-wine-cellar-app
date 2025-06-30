@@ -1,3 +1,4 @@
+// src/views/CellarView.js
 import React, { useMemo } from 'react';
 import WineItem from '../components/WineItem'; // Path adjusted for views folder
 
@@ -21,7 +22,7 @@ const WineBottleIcon = ({ className = "w-6 h-6" }) => (
 );
 
 
-const CellarView = ({ wines, searchTerm, setSearchTerm, handleOpenWineForm, confirmExperienceWine, handleOpenFoodPairing, isLoadingWines, user }) => {
+const CellarView = ({ wines, searchTerm, setSearchTerm, handleOpenWineForm, confirmExperienceWine, handleOpenFoodPairing, isLoadingWines, user, confirmDeleteWinePermanently }) => {
     const filteredWines = useMemo(() => {
         return wines.filter(wine => {
             const searchTermLower = searchTerm.toLowerCase();
@@ -95,6 +96,7 @@ const CellarView = ({ wines, searchTerm, setSearchTerm, handleOpenWineForm, conf
                                 onEdit={() => handleOpenWineForm(wine)}
                                 onExperience={() => confirmExperienceWine(wine.id)} 
                                 onPairFood={() => handleOpenFoodPairing(wine)} 
+                                onDelete={() => confirmDeleteWinePermanently(wine.id)} {/* Added onDelete prop */}
                             />
                         ))}
                     </div>

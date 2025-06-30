@@ -125,15 +125,18 @@ function App() {
     const { authError, isLoadingAuth, login, register, logout, performInitialAuth } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined);
     
     // Wrapped setGlobalError in useCallback for stability when passing to hooks
-    const setGlobalErrorCallback = useCallback((msg) => {
-        setGlobalError(msg);
+    const setGlobalErrorCallback = useCallback((msg, type = 'error', timeout = 5000) => {
+        setGlobalError({ message: msg, type: type });
+        if (type !== 'error') { // Auto-dismiss success/info/warning messages
+            setTimeout(() => setGlobalError(null), timeout);
+        }
     }, []);
 
     const { 
         handleAddWine, 
         handleUpdateWine, 
         handleExperienceWine, 
-        handleDeleteWine, // Import the new function
+        handleDeleteWine, 
         handleDeleteExperiencedWine, 
         handleEraseAllWines, 
         isLoadingAction, 
@@ -146,8 +149,8 @@ function App() {
         pairingError, 
         fetchFoodPairing, 
         findWineForFood,
-        setFoodPairingSuggestion: setFoodPairingSuggestionState, // Renamed to avoid conflict
-        setPairingError: setFoodPairingError // Renamed to avoid conflict with global setError
+        setFoodPairingSuggestion: setFoodPairingSuggestionState, 
+        setPairingError: setFoodPairingError 
     } = useFoodPairingAI(setGlobalErrorCallback); 
 
 
@@ -166,23 +169,21 @@ function App() {
     const [showExperienceWineModal, setShowExperienceWineModal] = useState(false);
     const [wineToExperience, setWineToExperience] = useState(null);
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
-
-    // FIX: Add missing state variables
-    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false); // Defined
-    const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false); // Defined
+    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+    const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
     const [wineToDelete, setWineToDelete] = useState(null); 
-    const [showReversePairingModal, setShowReversePairingModal] = useState(false); // Defined
+    const [showReversePairingModal, setShowReversePairingModal] = useState(false); 
     const [foodForReversePairing, setFoodForReversePairing] = useState(''); 
 
 
     // Combined global error for display (prioritizing order)
     const currentDisplayError = useMemo(() => {
-        return globalError || dataError || authError || wineActionError || pairingError;
+        // globalError is now an object { message, type }
+        return globalError?.message || dataError || authError || wineActionError || pairingError;
     }, [globalError, dataError, authError, wineActionError, pairingError]);
 
 
-    // FIX: Move useMemo out of conditional render for DrinkSoonView
     const winesApproachingEnd = useMemo(() => {
         const currentYear = new Date().getFullYear();
         const winesToConsider = [];
@@ -225,22 +226,24 @@ function App() {
         setShowFoodPairingModal(true); 
     }, [setFoodPairingSuggestionState, setFoodPairingError]); 
 
-    // FIX: Use handleDeleteWine from useWineActions
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
         setWineToDelete(wine);
         setShowDeleteConfirmModal(true);
     }, [wines]);
 
-    // FIX: Use handleDeleteWine from useWineActions
     const handleActualDeleteWinePermanently = useCallback(async () => { 
         if (!wineToDelete) return;
-        await handleDeleteWine(wineToDelete.id); 
+        const result = await handleDeleteWine(wineToDelete.id); // Get result from hook
+        if (result.success) {
+            setGlobalErrorCallback('Wine deleted permanently!', 'success');
+        } else {
+            setGlobalErrorCallback(result.error || 'Failed to delete wine permanently.', 'error');
+        }
         setShowDeleteConfirmModal(false);
         setWineToDelete(null);
-    }, [wineToDelete, handleDeleteWine]); 
+    }, [wineToDelete, handleDeleteWine, setGlobalErrorCallback]); 
 
-    // FIX: Define confirmDeleteExperiencedWine
     const confirmDeleteExperiencedWine = useCallback((wineId) => {
         const wine = experiencedWines.find(w => w.id === wineId);
         setExperiencedWineToDelete(wine);
@@ -249,18 +252,23 @@ function App() {
 
     const handleActualDeleteExperiencedWine = useCallback(async () => {
         if (!experiencedWineToDelete) return;
-        await handleDeleteExperiencedWine(experiencedWineToDelete.id);
+        const result = await handleDeleteExperiencedWine(experiencedWineToDelete.id); // Get result from hook
+        if (result.success) {
+            setGlobalErrorCallback('Experienced wine deleted successfully!', 'success');
+        } else {
+            setGlobalErrorCallback(result.error || 'Failed to delete experienced wine.', 'error');
+        }
         setShowDeleteExperiencedConfirmModal(false);
         setExperiencedWineToDelete(null);
-    }, [experiencedWineToDelete, handleDeleteExperiencedWine]);
+    }, [experiencedWineToDelete, handleDeleteExperiencedWine, setGlobalErrorCallback]);
 
     const confirmEraseAllWines = useCallback(() => {
         if (wines.length === 0) {
-            setGlobalError("Your cellar is already empty!"); 
+            setGlobalErrorCallback("Your cellar is already empty!", 'info'); 
             return;
         }
         setShowEraseAllConfirmModal(true);
-    }, [wines, setGlobalError]);
+    }, [wines, setGlobalErrorCallback]);
 
 
     // CSV Handlers from useCase/App.js scope
@@ -399,13 +407,13 @@ function App() {
 
     const exportCurrentCellar = useCallback(() => {
         exportToCsv(wines, 'my_wine_cellar', null, false);
-        setGlobalError(null); 
-    }, [wines]);
+        setGlobalErrorCallback(null); 
+    }, [wines, setGlobalErrorCallback]);
 
     const exportExperiencedWines = useCallback(() => {
         exportToCsv(experiencedWines, 'my_experienced_wine_cellar', null, true);
-        setGlobalError(null); 
-    }, [experiencedWines]);
+        setGlobalErrorCallback(null); 
+    }, [experiencedWines, setGlobalErrorCallback]);
 
 
     // --- Call initial auth logic on component mount ---
@@ -474,7 +482,7 @@ function App() {
                     )}
                 </div>
                  {/* Display global errors */}
-                 {currentDisplayError && <AlertMessage message={currentDisplayError} type="error" onDismiss={() => { setGlobalError(null); if (setFoodPairingError) setFoodPairingError(null); }} />}
+                 {currentDisplayError && <AlertMessage message={globalError.message} type={globalError.type} onDismiss={() => setGlobalError(null)} />}
             </header>
 
             <main className="container mx-auto">
@@ -560,13 +568,13 @@ function App() {
                                 handleOpenFoodPairing={handleOpenFoodPairing}
                                 isLoadingWines={isLoadingData} 
                                 user={user}
-                                confirmDeleteWinePermanently={confirmDeleteWinePermanently} // Pass down the confirm function
+                                confirmDeleteWinePermanently={confirmDeleteWinePermanently} 
                             />
                         )}
 
                         {currentView === 'drinkSoon' && (
                             <DrinkSoonView
-                                winesApproachingEnd={winesApproachingEnd} // Use the unconditionally defined memoized value
+                                winesApproachingEnd={winesApproachingEnd} 
                                 handleOpenWineForm={handleOpenWineForm}
                                 confirmExperienceWine={confirmExperienceWine}
                                 handleOpenFoodPairing={handleOpenFoodPairing}
@@ -577,9 +585,9 @@ function App() {
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
                                 setFoodForReversePairing={setFoodForReversePairing} 
-                                handleFindWineForFood={() => { // Modified to show ReverseFoodPairingModal
+                                handleFindWineForFood={() => { 
                                     findWineForFood(foodForReversePairing, wines);
-                                    setShowReversePairingModal(true); // Open the modal
+                                    setShowReversePairingModal(true); 
                                 }} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
@@ -598,14 +606,14 @@ function App() {
                                 handleExportExperiencedCsv={exportExperiencedWines} 
                                 experiencedWines={experiencedWines}
                                 confirmEraseAllWines={() => setShowEraseAllConfirmModal(true)} 
-                                setCsvImportStatus={setCsvImportStatus} // Pass setCsvImportStatus as prop
+                                setCsvImportStatus={setCsvImportStatus} 
                             />
                         )}
 
                         {currentView === 'experiencedWines' && (
                             <ExperiencedWinesView
                                 experiencedWines={experiencedWines}
-                                confirmDeleteExperiencedWine={confirmDeleteExperiencedWine} // Pass down the confirm function
+                                confirmDeleteExperiencedWine={confirmDeleteExperiencedWine} 
                             />
                         )}
                     </>
@@ -695,7 +703,7 @@ function App() {
                     isRegister={false}
                     auth={auth} 
                     onAuthSuccess={() => setShowLoginModal(false)}
-                    setError={(msg) => { setGlobalError(msg); setFoodPairingError(null); }} 
+                    setError={(msg) => { setGlobalErrorCallback(msg, 'error'); setFoodPairingError(null); }} 
                 />
                 <AuthModal
                     isOpen={showRegisterModal}
@@ -703,7 +711,7 @@ function App() {
                     isRegister={true}
                     auth={auth} 
                     onAuthSuccess={() => setShowRegisterModal(false)}
-                    setError={(msg) => { setGlobalError(msg); setFoodPairingError(null); }} 
+                    setError={(msg) => { setGlobalErrorCallback(msg, 'error'); setFoodPairingError(null); }} 
                 />
             </main>
             <footer className="text-center mt-12 py-4 border-t border-slate-200 dark:border-slate-700">
