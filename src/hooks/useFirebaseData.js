@@ -53,20 +53,22 @@ export const useFirebaseData = () => {
             setAuthInstance(authInstance);
             setDbInstance(dbInstance);
 
-            const unsubscribeAuth = onAuthStateChanged(authInstance, (firebaseUser) => {
-                if (firebaseUser) {
-                    setUser(firebaseUser);
-                    setUserId(firebaseUser.uid);
-                    setDataError(null);
-                } else {
-                    setUser(null);
-                    setUserId(null);
-                    setWines([]); // Clear wines on logout/no user
-                    setExperiencedWines([]); // Clear experienced wines on logout/no user
-                }
-                setIsAuthReady(true);
-            });
-            return () => unsubscribeAuth();
+			const unsubscribeAuth = onAuthStateChanged(authInstance, (firebaseUser) => {
+			                if (firebaseUser) {
+			                    setUser(firebaseUser);
+			                    setUserId(firebaseUser.uid);
+			                    console.log("DEBUG: Firebase user authenticated. UID:", firebaseUser.uid); // Add this line
+			                    setDataError(null);
+			                } else {
+			                    setUser(null);
+			                    setUserId(null);
+			                    setWines([]); // Clear wines on logout/no user
+			                    setExperiencedWines([]); // Clear experienced wines on logout/no user
+			                    console.log("DEBUG: No Firebase user authenticated."); // Add this line
+			                }
+			                setIsAuthReady(true);
+			            });
+						return () => unsubscribeAuth();
         } catch (e) {
             console.error("Error initializing Firebase:", e);
             setDataError("Could not initialize Firebase. Some features may not work.");

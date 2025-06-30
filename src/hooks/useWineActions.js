@@ -134,23 +134,24 @@ export const useWineActions = (db, userId, appId, setError) => {
         }
     };
 
-    const handleDeleteExperiencedWine = async (experiencedWineId) => {
-        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
-        setIsLoadingAction(true);
-        setActionError(null);
-        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineId);
-        try {
-            const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, experiencedWineId);
-            await deleteDoc(experiencedWineDocRef);
-            console.log("DEBUG: Experienced wine successfully deleted from Firestore:", experiencedWineId);
-            return { success: true };
-        } catch (err) {
-            console.error("DEBUG: Error deleting experienced wine from Firestore:", err.code, err.message);
-            setActionError(`Failed to delete experienced wine: ${err.message}. Check console for details.`);
-            return { success: false, error: err.message };
-        } finally { setIsLoadingAction(false); }
-    };
-
+	const handleDeleteExperiencedWine = async (experiencedWineId) => {
+	        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+	        setIsLoadingAction(true);
+	        setActionError(null);
+	        console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineId);
+	        console.log("DEBUG: userId used in handleDeleteExperiencedWine:", userId); // Add this line
+	        try {
+	            const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, experiencedWineId);
+	            await deleteDoc(experiencedWineDocRef);
+	            console.log("DEBUG: Experienced wine successfully deleted from Firestore:", experiencedWineId);
+	            return { success: true };
+	        } catch (err) {
+	            console.error("DEBUG: Error deleting experienced wine from Firestore:", err.code, err.message);
+	            setActionError(`Failed to delete experienced wine: ${err.message}. Check console for details.`);
+	            return { success: false, error: err.message };
+	        } finally { setIsLoadingAction(false); }
+	    };
+		
     const handleEraseAllWines = async () => {
         if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
         setIsLoadingAction(true);
