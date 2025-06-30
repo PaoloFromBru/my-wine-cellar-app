@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
@@ -132,6 +133,7 @@ function App() {
         handleAddWine, 
         handleUpdateWine, 
         handleExperienceWine, 
+        handleDeleteWine, // Import the new function
         handleDeleteExperiencedWine, 
         handleEraseAllWines, 
         isLoadingAction, 
@@ -164,9 +166,13 @@ function App() {
     const [showExperienceWineModal, setShowExperienceWineModal] = useState(false);
     const [wineToExperience, setWineToExperience] = useState(null);
     const [showEraseAllConfirmModal, setShowEraseAllConfirmModal] = useState(false);
-    const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false);
+
+    // FIX: Add missing state variables
+    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false); // Defined
+    const [showDeleteExperiencedConfirmModal, setShowDeleteExperiencedConfirmModal] = useState(false); // Defined
     const [experiencedWineToDelete, setExperiencedWineToDelete] = useState(null);
     const [wineToDelete, setWineToDelete] = useState(null); 
+    const [showReversePairingModal, setShowReversePairingModal] = useState(false); // Defined
     const [foodForReversePairing, setFoodForReversePairing] = useState(''); 
 
 
@@ -174,6 +180,30 @@ function App() {
     const currentDisplayError = useMemo(() => {
         return globalError || dataError || authError || wineActionError || pairingError;
     }, [globalError, dataError, authError, wineActionError, pairingError]);
+
+
+    // FIX: Move useMemo out of conditional render for DrinkSoonView
+    const winesApproachingEnd = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const winesToConsider = [];
+        wines.forEach(wine => {
+            const startYear = wine.drinkingWindowStartYear;
+            const endYear = wine.drinkingWindowEndYear;
+            if (startYear && endYear) {
+                if (endYear < currentYear) {
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Window Closed' });
+                } else if (endYear === currentYear) {
+                    winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
+                }
+            }
+        });
+        return winesToConsider.sort((a, b) => {
+            const statusOrder = { 'Drink Window Closed': 1, 'Drink Soon (This Year)': 2 };
+            const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
+            if (statusCompare !== 0) return statusCompare;
+            return (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity);
+        });
+    }, [wines]);
 
 
     // --- Handlers for Modals / Actions defined in App.js ---
@@ -195,19 +225,34 @@ function App() {
         setShowFoodPairingModal(true); 
     }, [setFoodPairingSuggestionState, setFoodPairingError]); 
 
+    // FIX: Use handleDeleteWine from useWineActions
     const confirmDeleteWinePermanently = useCallback((wineId) => { 
         const wine = wines.find(w => w.id === wineId);
         setWineToDelete(wine);
         setShowDeleteConfirmModal(true);
-    }, [wines, setShowDeleteConfirmModal]); // Added setShowDeleteConfirmModal to dependencies
+    }, [wines]);
 
+    // FIX: Use handleDeleteWine from useWineActions
     const handleActualDeleteWinePermanently = useCallback(async () => { 
         if (!wineToDelete) return;
-        await handleDeleteWinePermanently(wineToDelete.id); 
+        await handleDeleteWine(wineToDelete.id); 
         setShowDeleteConfirmModal(false);
         setWineToDelete(null);
-    }, [wineToDelete, handleDeleteWinePermanently, setShowDeleteConfirmModal]); // Added setShowDeleteConfirmModal to dependencies
+    }, [wineToDelete, handleDeleteWine]); 
 
+    // FIX: Define confirmDeleteExperiencedWine
+    const confirmDeleteExperiencedWine = useCallback((wineId) => {
+        const wine = experiencedWines.find(w => w.id === wineId);
+        setExperiencedWineToDelete(wine);
+        setShowDeleteExperiencedConfirmModal(true);
+    }, [experiencedWines]);
+
+    const handleActualDeleteExperiencedWine = useCallback(async () => {
+        if (!experiencedWineToDelete) return;
+        await handleDeleteExperiencedWine(experiencedWineToDelete.id);
+        setShowDeleteExperiencedConfirmModal(false);
+        setExperiencedWineToDelete(null);
+    }, [experiencedWineToDelete, handleDeleteExperiencedWine]);
 
     const confirmEraseAllWines = useCallback(() => {
         if (wines.length === 0) {
@@ -215,7 +260,7 @@ function App() {
             return;
         }
         setShowEraseAllConfirmModal(true);
-    }, [wines, setGlobalError, setShowEraseAllConfirmModal]); // Added setShowEraseAllConfirmModal to dependencies
+    }, [wines, setGlobalError]);
 
 
     // CSV Handlers from useCase/App.js scope
@@ -515,32 +560,13 @@ function App() {
                                 handleOpenFoodPairing={handleOpenFoodPairing}
                                 isLoadingWines={isLoadingData} 
                                 user={user}
+                                confirmDeleteWinePermanently={confirmDeleteWinePermanently} // Pass down the confirm function
                             />
                         )}
 
                         {currentView === 'drinkSoon' && (
                             <DrinkSoonView
-                                winesApproachingEnd={useMemo(() => {
-                                    const currentYear = new Date().getFullYear();
-                                    const winesToConsider = [];
-                                    wines.forEach(wine => {
-                                        const startYear = wine.drinkingWindowStartYear;
-                                        const endYear = wine.drinkingWindowEndYear;
-                                        if (startYear && endYear) {
-                                            if (endYear < currentYear) {
-                                                winesToConsider.push({ ...wine, drinkingStatus: 'Drink Window Closed' });
-                                            } else if (endYear === currentYear) {
-                                                winesToConsider.push({ ...wine, drinkingStatus: 'Drink Soon (This Year)' });
-                                            }
-                                        }
-                                    });
-                                    return winesToConsider.sort((a, b) => {
-                                        const statusOrder = { 'Drink Window Closed': 1, 'Drink Soon (This Year)': 2 };
-                                        const statusCompare = statusOrder[a.drinkingStatus] - statusOrder[b.drinkingStatus];
-                                        if (statusCompare !== 0) return statusCompare;
-                                        return (a.drinkingWindowEndYear || Infinity) - (b.drinkingWindowEndYear || Infinity);
-                                    });
-                                }, [wines])}
+                                winesApproachingEnd={winesApproachingEnd} // Use the unconditionally defined memoized value
                                 handleOpenWineForm={handleOpenWineForm}
                                 confirmExperienceWine={confirmExperienceWine}
                                 handleOpenFoodPairing={handleOpenFoodPairing}
@@ -551,7 +577,10 @@ function App() {
                             <FoodPairingView
                                 foodForReversePairing={foodForReversePairing}
                                 setFoodForReversePairing={setFoodForReversePairing} 
-                                handleFindWineForFood={() => findWineForFood(foodForReversePairing, wines)} 
+                                handleFindWineForFood={() => { // Modified to show ReverseFoodPairingModal
+                                    findWineForFood(foodForReversePairing, wines);
+                                    setShowReversePairingModal(true); // Open the modal
+                                }} 
                                 isLoadingReversePairing={isLoadingPairing}
                                 wines={wines}
                             />
@@ -575,7 +604,7 @@ function App() {
                         {currentView === 'experiencedWines' && (
                             <ExperiencedWinesView
                                 experiencedWines={experiencedWines}
-                                confirmDeleteExperiencedWine={confirmDeleteExperiencedWine}
+                                confirmDeleteExperiencedWine={confirmDeleteExperiencedWine} // Pass down the confirm function
                             />
                         )}
                     </>
@@ -599,7 +628,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => { if(wineToDelete) handleActualDeleteWinePermanently(); }} 
+                            onClick={handleActualDeleteWinePermanently} 
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently
@@ -651,7 +680,7 @@ function App() {
                             Cancel
                         </button>
                         <button
-                            onClick={() => { if(experiencedWineToDelete) handleDeleteExperiencedWine(experiencedWineToDelete.id); }} 
+                            onClick={handleActualDeleteExperiencedWine} 
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm"
                         >
                             Delete Permanently

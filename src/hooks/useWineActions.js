@@ -1,3 +1,4 @@
+// src/hooks/useWineActions.js
 import { useState } from 'react';
 import {
     collection,
@@ -116,6 +117,23 @@ export const useWineActions = (db, userId, appId, setError) => {
         } finally { setIsLoadingAction(false); }
     };
 
+    const handleDeleteWine = async (wineId) => { // New function added for deleting a single active wine
+        if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
+        setIsLoadingAction(true);
+        setActionError(null);
+        try {
+            const wineDocRef = doc(db, winesCollectionPath, wineId);
+            await deleteDoc(wineDocRef);
+            return { success: true };
+        } catch (err) {
+            console.error("Error deleting wine:", err);
+            setActionError(`Failed to delete wine: ${err.message}`);
+            return { success: false, error: err.message };
+        } finally {
+            setIsLoadingAction(false);
+        }
+    };
+
     const handleDeleteExperiencedWine = async (experiencedWineId) => {
         if (!db || !userId) { setActionError("Database not ready or user not logged in."); return { success: false }; }
         setIsLoadingAction(true);
@@ -164,6 +182,7 @@ export const useWineActions = (db, userId, appId, setError) => {
         handleAddWine,
         handleUpdateWine,
         handleExperienceWine,
+        handleDeleteWine, // Export the new function
         handleDeleteExperiencedWine,
         handleEraseAllWines,
         isLoadingAction,
