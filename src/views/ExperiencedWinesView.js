@@ -1,4 +1,5 @@
-import React from 'react';
+// src/views/ExperiencedWinesView.js
+import React, { useEffect } from 'react'; // Import useEffect
 import ExperiencedWineItem from '../components/ExperiencedWineItem.js'; // Path adjusted for views folder
 
 // --- Icons (local for this component for now) ---
@@ -10,6 +11,11 @@ const CheckCircleIcon = ({className="w-5 h-5"}) => (
 
 
 const ExperiencedWinesView = ({ experiencedWines, confirmDeleteExperiencedWine }) => {
+    // Add this useEffect to log the prop value on every render
+    useEffect(() => {
+        console.log("DEBUG: ExperiencedWinesView prop received:", experiencedWines.map(w => ({ id: w.id, name: w.name || w.producer })));
+    }, [experiencedWines]);
+
     return (
         <>
             <h2 className="text-2xl font-semibold text-slate-700 dark:text-slate-200 mb-4 mt-8">Experienced Wines</h2>
