@@ -96,7 +96,7 @@ const CellarView = ({ wines, searchTerm, setSearchTerm, handleOpenWineForm, conf
                                 onEdit={() => handleOpenWineForm(wine)}
                                 onExperience={() => confirmExperienceWine(wine.id)} 
                                 onPairFood={() => handleOpenFoodPairing(wine)} 
-                                onDelete={() => confirmDeleteWinePermanently(wine.id)} {/* Added onDelete prop */}
+                                onDelete={() => confirmDeleteWinePermanently(wine.id)} 
                             />
                         ))}
                     </div>
