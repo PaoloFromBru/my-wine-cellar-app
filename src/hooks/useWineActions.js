@@ -3,15 +3,15 @@ import { useState } from 'react';
 import {
     collection,
     addDoc,
-    doc,
+    doc, // Make sure 'doc' is imported
     updateDoc,
     deleteDoc,
     Timestamp,
     writeBatch,
     getDocs,
     query,
-    where,      // Explicitly imported
-    documentId  // Explicitly imported
+    where,
+    documentId
 } from 'firebase/firestore';
 
 export const useWineActions = (db, userId, appId, setError) => {
@@ -91,16 +91,21 @@ export const useWineActions = (db, userId, appId, setError) => {
         try {
             const batch = writeBatch(db);
             const wineDocRef = doc(db, winesCollectionPath, wineToMoveId);
-            const newExperiencedWineRef = doc(collection(db, experiencedWinesCollectionPath)); 
+            
+            // FIX START: Use the original wineToMoveId as the document ID for the experienced wine
+            const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, wineToMoveId); 
+            // FIX END
 
-            batch.set(newExperiencedWineRef, {
-                ...wineToMove,
+            // 1. Add to experienced wines collection (using the original ID)
+            batch.set(experiencedWineDocRef, { // Changed from newExperiencedWineRef to experiencedWineDocRef
+                ...wineToMove, 
                 tastingNotes: notes,
                 rating: rating,
                 consumedAt: consumedDate ? Timestamp.fromDate(new Date(consumedDate)) : Timestamp.now(),
                 experiencedAt: Timestamp.now(),
             });
 
+            // 2. Delete from active wines collection
             batch.delete(wineDocRef);
 
             await batch.commit();
@@ -133,8 +138,8 @@ export const useWineActions = (db, userId, appId, setError) => {
         setActionError(null);
         console.log("DEBUG: Attempting to delete experienced wine with ID:", experiencedWineId);
         console.log("DEBUG: userId used in handleDeleteExperiencedWine:", userId);
-        const fullDocPath = `artifacts/${appId}/users/${userId}/experiencedWines/${experiencedWineId}`; // Construct full path
-        console.log("DEBUG: Full Firestore document path for deletion:", fullDocPath); // Log the full path
+        const fullDocPath = `artifacts/${appId}/users/${userId}/experiencedWines/${experiencedWineId}`; 
+        console.log("DEBUG: Full Firestore document path for deletion:", fullDocPath); 
 
         try {
             const experiencedWineDocRef = doc(db, experiencedWinesCollectionPath, experiencedWineId); 
