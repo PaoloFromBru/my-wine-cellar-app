@@ -1,3 +1,4 @@
+// src/hooks/useAuthManager.js
 import { useState } from 'react';
 import {
     signInAnonymously,
@@ -10,10 +11,11 @@ import {
 export const useAuthManager = (authInstance, initialAuthToken) => {
     const [authError, setAuthError] = useState(null);
     const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+    const [explicitlyLoggedOut, setExplicitlyLoggedOut] = useState(false); // New state variable
 
     // Initial sign-in logic based on Canvas environment
     const performInitialAuth = async () => {
-        if (!authInstance) return;
+        if (!authInstance || explicitlyLoggedOut) return; // Added check for explicitlyLoggedOut
 
         setIsLoadingAuth(true);
         try {
@@ -34,6 +36,7 @@ export const useAuthManager = (authInstance, initialAuthToken) => {
     const login = async (email, password) => {
         setIsLoadingAuth(true);
         setAuthError(null);
+        setExplicitlyLoggedOut(false); // Clear explicit logout flag on login
         try {
             await signInWithEmailAndPassword(authInstance, email, password);
             return { success: true };
@@ -65,6 +68,7 @@ export const useAuthManager = (authInstance, initialAuthToken) => {
     const register = async (email, password) => {
         setIsLoadingAuth(true);
         setAuthError(null);
+        setExplicitlyLoggedOut(false); // Clear explicit logout flag on registration
         try {
             await createUserWithEmailAndPassword(authInstance, email, password);
             return { success: true };
@@ -96,6 +100,7 @@ export const useAuthManager = (authInstance, initialAuthToken) => {
         setAuthError(null);
         try {
             await signOut(authInstance);
+            setExplicitlyLoggedOut(true); // Set the flag when user explicitly logs out
             return { success: true };
         } catch (error) {
             console.error("Logout failed:", error);
@@ -112,6 +117,7 @@ export const useAuthManager = (authInstance, initialAuthToken) => {
         performInitialAuth,
         login,
         register,
-        logout
+        logout,
+        setExplicitlyLoggedOut // Export the setter for App.js
     };
 };

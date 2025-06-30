@@ -122,7 +122,7 @@ function App() {
 
     // --- Data and Auth Hooks ---
     const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
-    const { authError, isLoadingAuth, login, register, logout, performInitialAuth } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined);
+    const { authError, isLoadingAuth, login, register, logout, performInitialAuth, setExplicitlyLoggedOut } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined); // Destructure setExplicitlyLoggedOut
     
     // Wrapped setGlobalError in useCallback for stability when passing to hooks
     const setGlobalErrorCallback = useCallback((msg, type = 'error', timeout = 5000) => {
@@ -234,7 +234,7 @@ function App() {
 
     const handleActualDeleteWinePermanently = useCallback(async () => { 
         if (!wineToDelete) return;
-        const result = await handleDeleteWine(wineToDelete.id); // Get result from hook
+        const result = await handleDeleteWine(wineToDelete.id); 
         if (result.success) {
             setGlobalErrorCallback('Wine deleted permanently!', 'success');
         } else {
@@ -252,7 +252,7 @@ function App() {
 
     const handleActualDeleteExperiencedWine = useCallback(async () => {
         if (!experiencedWineToDelete) return;
-        const result = await handleDeleteExperiencedWine(experiencedWineToDelete.id); // Get result from hook
+        const result = await handleDeleteExperiencedWine(experiencedWineToDelete.id); 
         if (result.success) {
             setGlobalErrorCallback('Experienced wine deleted successfully!', 'success');
         } else {
@@ -418,6 +418,7 @@ function App() {
 
     // --- Call initial auth logic on component mount ---
     useEffect(() => {
+        // Only perform initial auth if not explicitly logged out
         if (auth && !user && isAuthReady && !isLoadingAuth) {
             performInitialAuth();
         }
@@ -457,7 +458,7 @@ function App() {
                                 {user.isAnonymous ? `Guest (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)` : (user.email || `User (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)`)}
                             </span>
                             <button
-                                onClick={logout} 
+                                onClick={logout} // This is the logout button
                                 className="p-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm flex items-center space-x-1"
                             >
                                 <LogoutIcon className="w-4 h-4" />
@@ -467,13 +468,13 @@ function App() {
                     ) : (
                         <div className="flex items-center space-x-3">
                             <button
-                                onClick={() => setShowLoginModal(true)}
+                                onClick={() => { setShowLoginModal(true); setExplicitlyLoggedOut(false); }} // Clear flag on explicit login/register
                                 className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold"
                             >
                                 Login
                             </button>
                             <button
-                                onClick={() => setShowRegisterModal(true)}
+                                onClick={() => { setShowRegisterModal(true); setExplicitlyLoggedOut(false); }} // Clear flag on explicit login/register
                                 className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
                             >
                                 Register
@@ -491,13 +492,13 @@ function App() {
                         <p className="text-lg mb-4">Please Login or Register to manage your wine cellar.</p>
                         <div className="flex justify-center items-center space-x-3 mt-4">
                             <button
-                                onClick={() => setShowLoginModal(true)}
+                                onClick={() => { setShowLoginModal(true); setExplicitlyLoggedOut(false); }}
                                 className="px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white text-lg font-semibold"
                             >
                                 Login
                             </button>
                             <button
-                                onClick={() => setShowRegisterModal(true)}
+                                onClick={() => { setShowRegisterModal(true); setExplicitlyLoggedOut(false); }}
                                 className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold"
                             >
                                 Register
