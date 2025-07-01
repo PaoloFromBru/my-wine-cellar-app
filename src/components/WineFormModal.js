@@ -1,8 +1,13 @@
 // src/components/WineFormModal.js
-import React, { useState, useEffect, useRef } from 'react'; // Added useRef
-import Webcam from 'react-webcam'; // Import Webcam
-import Modal from './Modal.js'; // Import Modal
-import AlertMessage from './AlertMessage.js'; // Import AlertMessage
+import React, { useState, useEffect, useRef } from 'react';
+import Webcam from 'react-webcam';
+// REMOVED: No longer using createWorker from tesseract.js
+import Modal from './Modal.js';
+import AlertMessage from './AlertMessage.js';
+
+// NEW IMPORTS FOR FIREBASE FUNCTIONS
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app'; // Needed to get the initialized Firebase app instance
 
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     const [formData, setFormData] = useState({
@@ -17,11 +22,14 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     });
     const [formError, setFormError] = useState('');
 
-    // --- New state for camera and OCR ---
-    const [isScanning, setIsScanning] = useState(false); // Controls camera view
-    const webcamRef = useRef(null); // Ref for the webcam component
-    const [isProcessingImage, setIsProcessingImage] = useState(false); // Indicates OCR processing
-    const [scanResult, setScanResult] = useState(''); // To hold raw OCR text result
+    const [isScanning, setIsScanning] = useState(false);
+    const webcamRef = useRef(null);
+    const [isProcessingImage, setIsProcessingImage] = useState(false);
+    const [scanResult, setScanResult] = useState(''); 
+
+    // Initialize Firebase Functions instance (only once per component lifecycle)
+    const functions = getFunctions(getApp()); // Get functions instance from the default app
+    const callScanWineLabelFunction = httpsCallable(functions, 'scanWineLabel'); // Reference to your deployed function
 
     useEffect(() => {
         if (wine) {
@@ -39,9 +47,9 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             setFormData({ name: '', producer: '', year: '', region: '', color: 'red', location: '', drinkingWindowStartYear: '', drinkingWindowEndYear: '' });
         }
         setFormError(''); 
-        setIsScanning(false); // Reset scan mode when modal opens/changes wine
-        setScanResult(''); // Clear previous scan results
-        setIsProcessingImage(false); // Reset processing state
+        setIsScanning(false);
+        setScanResult(''); 
+        setIsProcessingImage(false);
     }, [wine, isOpen]); 
 
     const handleChange = (e) => {
@@ -101,35 +109,60 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
     const wineColorOptions = ['red', 'white', 'rose', 'sparkling', 'other'];
 
-    // --- New function to capture photo and trigger OCR ---
-    const captureAndOCR = async () => {
+    // --- Function to capture photo and send to Firebase Cloud Function ---
+    const captureAndSendToCloudFunction = async () => {
         if (webcamRef.current) {
             setIsProcessingImage(true);
-            setScanResult('');
-            const imageSrc = webcamRef.current.getScreenshot(); // Get base64 image data
+            setScanResult(''); // Clear previous scan results
+            setFormError(''); // Clear previous form errors
+            const imageSrc = webcamRef.current.getScreenshot(); 
 
-            // Placeholder for Tesseract.js OCR processing
-            // You will implement this in the next step
+            if (!imageSrc) {
+                setFormError("Failed to capture image from webcam.");
+                setIsProcessingImage(false);
+                return;
+            }
+            
             try {
-                // Example of how Tesseract.js would be used (requires it to be imported)
-                // const { createWorker } = require('tesseract.js'); // Don't use require in browser React
-                // const worker = await createWorker('eng'); // 'eng' for English language
-                // const { data: { text } } = await worker.recognize(imageSrc);
-                // setScanResult(text);
-                // await worker.terminate();
-                
-                // For now, let's just simulate a result
-                console.log("Image captured:", imageSrc); // You can see the base64 image in console
-                setScanResult("Simulated OCR Result: Wine Name, Producer, 2020, Region"); // Replace with actual OCR text
-                
-                // Switch back to form view
-                setIsScanning(false); 
-                // You would then parse scanResult and update formData
-                // For example: setFormData(prev => ({ ...prev, name: "Scanned Wine", year: "2020" }));
+                // Call the Firebase Cloud Function
+                const response = await callScanWineLabelFunction({ image: imageSrc });
+                const { success, fullText } = response.data; // Data is nested under .data for callable functions
 
-            } catch (ocrError) {
-                console.error("Error during OCR:", ocrError);
-                setFormError("Failed to process image for text recognition.");
+                if (success) {
+                    setScanResult(fullText); // Display the full text from the Cloud Function
+
+                    // --- Basic Parsing of OCR output (refine this as needed) ---
+                    // This is a very simple example assuming "Year: XXXX" format or finding a 4-digit number.
+                    const yearMatch = fullText.match(/\b(19|20)\d{2}\b/);
+                    
+                    // You'll need more robust regex or logic here for other fields.
+                    // Example: Try to find "Producer:", "Name:", "Region:", "Vol:" etc.
+                    const producerMatch = fullText.match(/(?:Producer|Domaine|Château|Bodega|Winery)[:\s]*([^\n,]+)/i);
+                    const nameMatch = fullText.match(/(?:Name|Wine|Label)[:\s]*([^\n,]+)/i);
+                    const regionMatch = fullText.match(/(?:Region|Appellation)[:\s]*([^\n,]+)/i);
+
+                    setFormData(prev => ({
+                        ...prev,
+                        year: yearMatch ? yearMatch[0] : prev.year,
+                        producer: producerMatch ? producerMatch[1].trim() : prev.producer,
+                        name: nameMatch ? nameMatch[1].trim() : prev.name,
+                        region: regionMatch ? regionMatch[1].trim() : prev.region,
+                        // You can add more logic here to parse other fields from fullText
+                        // For instance, for color, you might check for keywords like "red", "white", "rosé"
+                        // or try to infer from common grape varietals.
+                    }));
+
+                } else {
+                    setFormError(fullText || "Could not extract information from the label (Cloud Function issue).");
+                }
+                
+                setIsScanning(false); // Switch back to form view
+
+            } catch (functionError) {
+                console.error("Error calling Cloud Function:", functionError);
+                // HttpsError details are in functionError.code and functionError.message
+                setFormError(`Failed to scan label: ${functionError.message}. Please try again.`);
+                setIsScanning(false); // Return to form on error
             } finally {
                 setIsProcessingImage(false);
             }
@@ -144,6 +177,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             {!isScanning && ( // Show form if not scanning
                 <>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Existing form fields */}
                         <div>
                             <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name (Optional)</label>
                             <input
@@ -221,7 +255,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         </div>
 
                         <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
-                            <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">Drinking Window (Optional)</h3>
+                            <h3 className="base font-semibold text-slate-700 dark:text-slate-200 mb-2">Drinking Window (Optional)</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="drinkingWindowStartYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Year</label>
@@ -253,7 +287,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         <div className="flex justify-between items-center space-x-3 pt-2">
                             <button
                                 type="button"
-                                onClick={() => setIsScanning(true)} // Button to open camera view
+                                onClick={() => setIsScanning(true)}
                                 className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-600 hover:bg-blue-200 dark:hover:bg-blue-500 rounded-md border border-blue-300 dark:border-blue-500"
                             >
                                 <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -299,12 +333,12 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            Processing image...
+                            Processing image with AI...
                         </p>
                     )}
                     {scanResult && (
                         <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md mb-4 w-full text-sm text-slate-700 dark:text-blue-200 whitespace-pre-wrap">
-                            **Scanned Text:** <br/> {scanResult}
+                            **AI Scanned Text:** <br/> {scanResult}
                         </div>
                     )}
                     <div className="flex justify-end space-x-3 w-full">
@@ -317,11 +351,11 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         </button>
                         <button
                             type="button"
-                            onClick={captureAndOCR}
+                            onClick={captureAndSendToCloudFunction} // Call the Cloud Function
                             disabled={isProcessingImage}
                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Capture Photo & Scan
+                            Capture Photo & Scan with AI
                         </button>
                     </div>
                 </div>
