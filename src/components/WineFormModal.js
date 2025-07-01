@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+// src/components/WineFormModal.js
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
+import Webcam from 'react-webcam'; // Import Webcam
 import Modal from './Modal.js'; // Import Modal
 import AlertMessage from './AlertMessage.js'; // Import AlertMessage
 
-const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => { 
+const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     const [formData, setFormData] = useState({
         name: '', 
         producer: '',
@@ -14,6 +16,12 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         drinkingWindowEndYear: ''    
     });
     const [formError, setFormError] = useState('');
+
+    // --- New state for camera and OCR ---
+    const [isScanning, setIsScanning] = useState(false); // Controls camera view
+    const webcamRef = useRef(null); // Ref for the webcam component
+    const [isProcessingImage, setIsProcessingImage] = useState(false); // Indicates OCR processing
+    const [scanResult, setScanResult] = useState(''); // To hold raw OCR text result
 
     useEffect(() => {
         if (wine) {
@@ -31,6 +39,9 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             setFormData({ name: '', producer: '', year: '', region: '', color: 'red', location: '', drinkingWindowStartYear: '', drinkingWindowEndYear: '' });
         }
         setFormError(''); 
+        setIsScanning(false); // Reset scan mode when modal opens/changes wine
+        setScanResult(''); // Clear previous scan results
+        setIsProcessingImage(false); // Reset processing state
     }, [wine, isOpen]); 
 
     const handleChange = (e) => {
@@ -90,132 +101,231 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
     const wineColorOptions = ['red', 'white', 'rose', 'sparkling', 'other'];
 
+    // --- New function to capture photo and trigger OCR ---
+    const captureAndOCR = async () => {
+        if (webcamRef.current) {
+            setIsProcessingImage(true);
+            setScanResult('');
+            const imageSrc = webcamRef.current.getScreenshot(); // Get base64 image data
+
+            // Placeholder for Tesseract.js OCR processing
+            // You will implement this in the next step
+            try {
+                // Example of how Tesseract.js would be used (requires it to be imported)
+                // const { createWorker } = require('tesseract.js'); // Don't use require in browser React
+                // const worker = await createWorker('eng'); // 'eng' for English language
+                // const { data: { text } } = await worker.recognize(imageSrc);
+                // setScanResult(text);
+                // await worker.terminate();
+                
+                // For now, let's just simulate a result
+                console.log("Image captured:", imageSrc); // You can see the base64 image in console
+                setScanResult("Simulated OCR Result: Wine Name, Producer, 2020, Region"); // Replace with actual OCR text
+                
+                // Switch back to form view
+                setIsScanning(false); 
+                // You would then parse scanResult and update formData
+                // For example: setFormData(prev => ({ ...prev, name: "Scanned Wine", year: "2020" }));
+
+            } catch (ocrError) {
+                console.error("Error during OCR:", ocrError);
+                setFormError("Failed to process image for text recognition.");
+            } finally {
+                setIsProcessingImage(false);
+            }
+        }
+    };
+
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={wine ? 'Edit Wine' : 'Add New Wine'}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                {formError && <AlertMessage message={formError} type="error" onDismiss={() => setFormError('')} />}
-                <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name (Optional)</label>
-                    <input
-                        type="text"
-                        name="name"
-                        id="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="producer" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Producer <span className="text-red-500">*</span></label>
-                    <input
-                        type="text"
-                        name="producer"
-                        id="producer"
-                        value={formData.producer}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="year" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Year</label>
-                    <input
-                        type="number"
-                        name="year"
-                        id="year"
-                        value={formData.year}
-                        onChange={handleChange}
-                        placeholder={`e.g., ${new Date().getFullYear() - 5}`}
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="region" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Region <span className="text-red-500">*</span></label>
-                    <input
-                        type="text"
-                        name="region"
-                        id="region"
-                        value={formData.region}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="color" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Color <span className="text-red-500">*</span></label>
-                    <select
-                        name="color"
-                        id="color"
-                        value={formData.color}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    >
-                        {wineColorOptions.map(opt => (
-                            <option key={opt} value={opt} className="capitalize">{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="location" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Cellar Location <span className="text-red-500">*</span></label>
-                    <input
-                        type="text"
-                        name="location"
-                        id="location"
-                        value={formData.location}
-                        onChange={handleChange}
-                        placeholder="e.g., Rack A, Shelf 3"
-                        required
-                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
-                    />
-                </div>
+            {formError && <AlertMessage message={formError} type="error" onDismiss={() => setFormError('')} />}
 
-                <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
-                    <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">Drinking Window (Optional)</h3>
-                    <div className="grid grid-cols-2 gap-4">
+            {!isScanning && ( // Show form if not scanning
+                <>
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label htmlFor="drinkingWindowStartYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Year</label>
+                            <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name (Optional)</label>
                             <input
-                                type="number"
-                                name="drinkingWindowStartYear"
-                                id="drinkingWindowStartYear"
-                                value={formData.drinkingWindowStartYear}
+                                type="text"
+                                name="name"
+                                id="name"
+                                value={formData.name}
                                 onChange={handleChange}
-                                placeholder="e.g., 2023"
                                 className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
                             />
                         </div>
                         <div>
-                            <label htmlFor="drinkingWindowEndYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">End Year</label>
+                            <label htmlFor="producer" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Producer <span className="text-red-500">*</span></label>
                             <input
-                                type="number"
-                                name="drinkingWindowEndYear"
-                                id="drinkingWindowEndYear"
-                                value={formData.drinkingWindowEndYear}
+                                type="text"
+                                name="producer"
+                                id="producer"
+                                value={formData.producer}
                                 onChange={handleChange}
-                                placeholder="e.g., 2030"
+                                required
                                 className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
                             />
                         </div>
+                        <div>
+                            <label htmlFor="year" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Year</label>
+                            <input
+                                type="number"
+                                name="year"
+                                id="year"
+                                value={formData.year}
+                                onChange={handleChange}
+                                placeholder={`e.g., ${new Date().getFullYear() - 5}`}
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="region" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Region <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                name="region"
+                                id="region"
+                                value={formData.region}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="color" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Color <span className="text-red-500">*</span></label>
+                            <select
+                                name="color"
+                                id="color"
+                                value={formData.color}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            >
+                                {wineColorOptions.map(opt => (
+                                    <option key={opt} value={opt} className="capitalize">{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="location" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Cellar Location <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                name="location"
+                                id="location"
+                                value={formData.location}
+                                onChange={handleChange}
+                                placeholder="e.g., Rack A, Shelf 3"
+                                required
+                                className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                            />
+                        </div>
+
+                        <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
+                            <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">Drinking Window (Optional)</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="drinkingWindowStartYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Year</label>
+                                    <input
+                                        type="number"
+                                        name="drinkingWindowStartYear"
+                                        id="drinkingWindowStartYear"
+                                        value={formData.drinkingWindowStartYear}
+                                        onChange={handleChange}
+                                        placeholder="e.g., 2023"
+                                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="drinkingWindowEndYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300">End Year</label>
+                                    <input
+                                        type="number"
+                                        name="drinkingWindowEndYear"
+                                        id="drinkingWindowEndYear"
+                                        value={formData.drinkingWindowEndYear}
+                                        onChange={handleChange}
+                                        placeholder="e.g., 2030"
+                                        className="mt-1 block w-full p-2.5 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-red-500 focus:border-red-500 shadow-sm sm:text-sm dark:bg-slate-700 dark:text-slate-200"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center space-x-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsScanning(true)} // Button to open camera view
+                                className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-600 hover:bg-blue-200 dark:hover:bg-blue-500 rounded-md border border-blue-300 dark:border-blue-500"
+                            >
+                                <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Scan Label
+                            </button>
+                            <div className="flex space-x-3">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                >
+                                    {wine ? 'Save Changes' : 'Add Wine'}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </>
+            )}
+
+            {isScanning && ( // Show camera view if scanning
+                <div className="flex flex-col items-center">
+                    <h3 className="text-xl font-semibold mb-3 text-slate-700 dark:text-slate-200">Scan Wine Label</h3>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-lg overflow-hidden mb-4">
+                        <Webcam
+                            audio={false}
+                            ref={webcamRef}
+                            screenshotFormat="image/jpeg"
+                            width={400} // Adjust as needed
+                            height={300} // Adjust as needed
+                            className="w-full h-full object-cover"
+                            videoConstraints={{ facingMode: "environment" }} // Prefer rear camera on mobile
+                        />
+                    </div>
+                    {isProcessingImage && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-2 flex items-center">
+                            <svg className="animate-spin h-4 w-4 mr-2 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing image...
+                        </p>
+                    )}
+                    {scanResult && (
+                        <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md mb-4 w-full text-sm text-slate-700 dark:text-blue-200 whitespace-pre-wrap">
+                            **Scanned Text:** <br/> {scanResult}
+                        </div>
+                    )}
+                    <div className="flex justify-end space-x-3 w-full">
+                        <button
+                            type="button"
+                            onClick={() => setIsScanning(false)} // Back to form
+                            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
+                        >
+                            Back to Form
+                        </button>
+                        <button
+                            type="button"
+                            onClick={captureAndOCR}
+                            disabled={isProcessingImage}
+                            className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Capture Photo & Scan
+                        </button>
                     </div>
                 </div>
-
-                <div className="flex justify-end space-x-3 pt-2">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-md border border-slate-300 dark:border-slate-500"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                        {wine ? 'Save Changes' : 'Add Wine'}
-                    </button>
-                </div>
-            </form>
+            )}
         </Modal>
     );
 };
