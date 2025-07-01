@@ -1,35 +1,37 @@
 // src/components/WineFormModal.js
 import React, { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
-// REMOVED: No longer using createWorker from tesseract.js
 import Modal from './Modal.js';
 import AlertMessage from './AlertMessage.js';
 
-// NEW IMPORTS FOR FIREBASE FUNCTIONS
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getApp } from 'firebase/app'; // Needed to get the initialized Firebase app instance
+import { getApp } from 'firebase/app';
+// NEW IMPORT for auth
+import { getAuth } from 'firebase/auth'; // Import getAuth
 
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     const [formData, setFormData] = useState({
-        name: '', 
+        name: '',
         producer: '',
         year: '',
         region: '',
-        color: 'red', 
+        color: 'red',
         location: '',
-        drinkingWindowStartYear: '', 
-        drinkingWindowEndYear: ''    
+        drinkingWindowStartYear: '',
+        drinkingWindowEndYear: ''
     });
     const [formError, setFormError] = useState('');
 
     const [isScanning, setIsScanning] = useState(false);
     const webcamRef = useRef(null);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
-    const [scanResult, setScanResult] = useState(''); 
+    const [scanResult, setScanResult] = useState('');
 
-    // Initialize Firebase Functions instance (only once per component lifecycle)
-    const functions = getFunctions(getApp()); // Get functions instance from the default app
-    const callScanWineLabelFunction = httpsCallable(functions, 'scanWineLabel'); // Reference to your deployed function
+    const functions = getFunctions(getApp());
+    const callScanWineLabelFunction = httpsCallable(functions, 'scanWineLabel');
+
+    // NEW: Get auth instance
+    const auth = getAuth(getApp());
 
     useEffect(() => {
         if (wine) {
@@ -46,11 +48,11 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         } else {
             setFormData({ name: '', producer: '', year: '', region: '', color: 'red', location: '', drinkingWindowStartYear: '', drinkingWindowEndYear: '' });
         }
-        setFormError(''); 
+        setFormError('');
         setIsScanning(false);
-        setScanResult(''); 
+        setScanResult('');
         setIsProcessingImage(false);
-    }, [wine, isOpen]); 
+    }, [wine, isOpen]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -64,7 +66,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             setFormError('Producer, Region, Color, and Location are required.');
             return;
         }
-        if (formData.year && (isNaN(parseInt(formData.year)) || parseInt(formData.year) < 1000 || parseInt(formData.year) > new Date().getFullYear() + 10 )) { 
+        if (formData.year && (isNaN(parseInt(formData.year)) || parseInt(formData.year) < 1000 || parseInt(formData.year) > new Date().getFullYear() + 10)) {
             setFormError('Please enter a valid Year (e.g., 2020).');
             return;
         }
@@ -89,11 +91,11 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         if (formData.location && allWines) {
             const currentLocation = formData.location.trim().toLowerCase();
             let isLocationTaken = false;
-            if (wine && wine.id) { 
+            if (wine && wine.id) {
                 isLocationTaken = allWines.some(
                     w => w.id !== wine.id && w.location && w.location.trim().toLowerCase() === currentLocation
                 );
-            } else { 
+            } else {
                 isLocationTaken = allWines.some(
                     w => w.location && w.location.trim().toLowerCase() === currentLocation
                 );
@@ -113,56 +115,66 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     const captureAndSendToCloudFunction = async () => {
         if (webcamRef.current) {
             setIsProcessingImage(true);
-            setScanResult(''); // Clear previous scan results
-            setFormError(''); // Clear previous form errors
-            const imageSrc = webcamRef.current.getScreenshot(); 
+            setScanResult('');
+            setFormError('');
+            const imageSrc = webcamRef.current.getScreenshot();
 
             if (!imageSrc) {
                 setFormError("Failed to capture image from webcam.");
                 setIsProcessingImage(false);
                 return;
             }
-            
+
+            // --- NEW DEBUG LOGS FOR AUTHENTICATION STATE ---
+            console.log("DEBUG Client Auth State:");
+            console.log("  Current User:", auth.currentUser);
+            if (auth.currentUser) {
+                try {
+                    const idTokenResult = await auth.currentUser.getIdTokenResult();
+                    console.log("  User UID:", auth.currentUser.uid);
+                    console.log("  User Email:", auth.currentUser.email);
+                    console.log("  User isAnonymous:", auth.currentUser.isAnonymous);
+                    console.log("  ID Token Present:", !!idTokenResult.token);
+                    console.log("  ID Token Expiration Time:", idTokenResult.expirationTime);
+                } catch (tokenError) {
+                    console.error("  Error getting ID Token:", tokenError);
+                }
+            } else {
+                console.log("  No user is currently authenticated on the client.");
+            }
+            // --- END NEW DEBUG LOGS ---
+
             try {
-                // Call the Firebase Cloud Function
                 const response = await callScanWineLabelFunction({ image: imageSrc });
-                const { success, fullText } = response.data; // Data is nested under .data for callable functions
+                const { success, fullText } = response.data;
 
                 if (success) {
-                    setScanResult(fullText); // Display the full text from the Cloud Function
+                    setScanResult(fullText);
 
-                    // --- Basic Parsing of OCR output (refine this as needed) ---
-                    // This is a very simple example assuming "Year: XXXX" format or finding a 4-digit number.
                     const yearMatch = fullText.match(/\b(19|20)\d{2}\b/);
-                    
-                    // You'll need more robust regex or logic here for other fields.
-                    // Example: Try to find "Producer:", "Name:", "Region:", "Vol:" etc.
                     const producerMatch = fullText.match(/(?:Producer|Domaine|Château|Bodega|Winery)[:\s]*([^\n,]+)/i);
                     const nameMatch = fullText.match(/(?:Name|Wine|Label)[:\s]*([^\n,]+)/i);
                     const regionMatch = fullText.match(/(?:Region|Appellation)[:\s]*([^\n,]+)/i);
 
                     setFormData(prev => ({
                         ...prev,
-                        year: yearMatch ? yearMatch[0] : prev.year,
-                        producer: producerMatch ? producerMatch[1].trim() : prev.producer,
-                        name: nameMatch ? nameMatch[1].trim() : prev.name,
-                        region: regionMatch ? regionMatch[1].trim() : prev.region,
-                        // You can add more logic here to parse other fields from fullText
-                        // For instance, for color, you might check for keywords like "red", "white", "rosé"
-                        // or try to infer from common grape varietals.
+                        name: nameMatch && nameMatch[1] !== 'N/A' ? nameMatch[1].trim() : prev.name,
+                        producer: producerMatch && producerMatch[1] !== 'N/A' ? producerMatch[1].trim() : prev.producer,
+                        year: yearMatch && yearMatch[1] !== 'N/A' ? yearMatch[1] : prev.year,
+                        region: regionMatch && regionMatch[1] !== 'N/A' ? regionMatch[1].trim() : prev.region,
                     }));
 
                 } else {
                     setFormError(fullText || "Could not extract information from the label (Cloud Function issue).");
                 }
-                
-                setIsScanning(false); // Switch back to form view
+
+                setIsScanning(false);
+                setScanResult(''); // Clear scan result display after populating fields
 
             } catch (functionError) {
                 console.error("Error calling Cloud Function:", functionError);
-                // HttpsError details are in functionError.code and functionError.message
                 setFormError(`Failed to scan label: ${functionError.message}. Please try again.`);
-                setIsScanning(false); // Return to form on error
+                setIsScanning(false);
             } finally {
                 setIsProcessingImage(false);
             }
@@ -174,10 +186,9 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         <Modal isOpen={isOpen} onClose={onClose} title={wine ? 'Edit Wine' : 'Add New Wine'}>
             {formError && <AlertMessage message={formError} type="error" onDismiss={() => setFormError('')} />}
 
-            {!isScanning && ( // Show form if not scanning
+            {!isScanning && (
                 <>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Existing form fields */}
                         <div>
                             <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name (Optional)</label>
                             <input
@@ -351,7 +362,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         </button>
                         <button
                             type="button"
-                            onClick={captureAndSendToCloudFunction} // Call the Cloud Function
+                            onClick={captureAndSendToCloudFunction}
                             disabled={isProcessingImage}
                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
