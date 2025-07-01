@@ -6,8 +6,7 @@ import AlertMessage from './AlertMessage.js';
 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp } from 'firebase/app';
-// NEW IMPORT for auth
-import { getAuth } from 'firebase/auth'; // Import getAuth
+import { getAuth } from 'firebase/auth';
 
 const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
     const [formData, setFormData] = useState({
@@ -29,8 +28,6 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
     const functions = getFunctions(getApp());
     const callScanWineLabelFunction = httpsCallable(functions, 'scanWineLabel');
-
-    // NEW: Get auth instance
     const auth = getAuth(getApp());
 
     useEffect(() => {
@@ -111,38 +108,23 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
     const wineColorOptions = ['red', 'white', 'rose', 'sparkling', 'other'];
 
-    // --- Function to capture photo and send to Firebase Cloud Function ---
     const captureAndSendToCloudFunction = async () => {
         if (webcamRef.current) {
             setIsProcessingImage(true);
             setScanResult('');
             setFormError('');
-            const imageSrc = webcamRef.current.getScreenshot();
+            const imageSrc = webcamRef.current.getScreenshot(); // Get base64 image data
+
+            // --- NEW FRONTEND DEBUG LOGS ---
+            console.log("DEBUG FRONTEND: imageSrc from webcam.getScreenshot():", imageSrc);
+            console.log("DEBUG FRONTEND: imageSrc length:", imageSrc ? imageSrc.length : 'N/A');
+            // --- END NEW FRONTEND DEBUG LOGS ---
 
             if (!imageSrc) {
                 setFormError("Failed to capture image from webcam.");
                 setIsProcessingImage(false);
                 return;
             }
-
-            // --- NEW DEBUG LOGS FOR AUTHENTICATION STATE ---
-            console.log("DEBUG Client Auth State:");
-            console.log("  Current User:", auth.currentUser);
-            if (auth.currentUser) {
-                try {
-                    const idTokenResult = await auth.currentUser.getIdTokenResult();
-                    console.log("  User UID:", auth.currentUser.uid);
-                    console.log("  User Email:", auth.currentUser.email);
-                    console.log("  User isAnonymous:", auth.currentUser.isAnonymous);
-                    console.log("  ID Token Present:", !!idTokenResult.token);
-                    console.log("  ID Token Expiration Time:", idTokenResult.expirationTime);
-                } catch (tokenError) {
-                    console.error("  Error getting ID Token:", tokenError);
-                }
-            } else {
-                console.log("  No user is currently authenticated on the client.");
-            }
-            // --- END NEW DEBUG LOGS ---
 
             try {
                 const response = await callScanWineLabelFunction({ image: imageSrc });
@@ -158,10 +140,10 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
                     setFormData(prev => ({
                         ...prev,
-                        name: nameMatch && nameMatch[1] !== 'N/A' ? nameMatch[1].trim() : prev.name,
-                        producer: producerMatch && producerMatch[1] !== 'N/A' ? producerMatch[1].trim() : prev.producer,
-                        year: yearMatch && yearMatch[1] !== 'N/A' ? yearMatch[1] : prev.year,
-                        region: regionMatch && regionMatch[1] !== 'N/A' ? regionMatch[1].trim() : prev.region,
+                        name: nameMatch ? nameMatch[1].trim() : prev.name,
+                        producer: producerMatch ? producerMatch[1].trim() : prev.producer,
+                        year: yearMatch ? yearMatch[0] : prev.year,
+                        region: regionMatch ? regionMatch[1].trim() : prev.region,
                     }));
 
                 } else {
@@ -169,7 +151,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                 }
 
                 setIsScanning(false);
-                setScanResult(''); // Clear scan result display after populating fields
+                setScanResult('');
 
             } catch (functionError) {
                 console.error("Error calling Cloud Function:", functionError);
@@ -362,7 +344,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                         </button>
                         <button
                             type="button"
-                            onClick={captureAndSendToCloudFunction}
+                            onClick={captureAndSendToCloudFunction} // Call the Cloud Function
                             disabled={isProcessingImage}
                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
