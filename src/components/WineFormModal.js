@@ -23,8 +23,11 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
 
     const [isScanning, setIsScanning] = useState(false);
     const webcamRef = useRef(null);
+    const canvasRef = useRef(null);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [scanResult, setScanResult] = useState('');
+
+    const [webcamKey, setWebcamKey] = useState(Date.now()); 
 
     const functions = getFunctions(getApp());
     const callScanWineLabelFunction = httpsCallable(functions, 'scanWineLabel');
@@ -49,6 +52,7 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
         setIsScanning(false);
         setScanResult('');
         setIsProcessingImage(false);
+        setWebcamKey(Date.now()); 
     }, [wine, isOpen]);
 
     const handleChange = (e) => {
@@ -113,20 +117,94 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
             setIsProcessingImage(true);
             setScanResult('');
             setFormError('');
-            const imageSrc = webcamRef.current.getScreenshot(); // Get base64 image data
 
-            // --- NEW FRONTEND DEBUG LOGS ---
-            console.log("DEBUG FRONTEND: imageSrc from webcam.getScreenshot():", imageSrc);
-            console.log("DEBUG FRONTEND: imageSrc length:", imageSrc ? imageSrc.length : 'N/A');
-            // --- END NEW FRONTEND DEBUG LOGS ---
+            setWebcamKey(Date.now()); 
+            
+            const checkWebcamReady = () => {
+                return new Promise((resolve, reject) => {
+                    let attempts = 0;
+                    const maxAttempts = 50; 
+                    const interval = 100; 
 
-            if (!imageSrc) {
-                setFormError("Failed to capture image from webcam.");
-                setIsProcessingImage(false);
-                return;
-            }
+                    const poll = () => {
+                        console.log("DEBUG FRONTEND: Polling webcam. Attempt:", attempts, "readyState:", webcamRef.current?.video?.readyState);
+                        console.log("DEBUG FRONTEND: videoWidth:", webcamRef.current?.video?.videoWidth, "videoHeight:", webcamRef.current?.video?.videoHeight);
+                        console.log("DEBUG FRONTEND: srcObject:", webcamRef.current?.video?.srcObject);
+                        console.log("DEBUG FRONTEND: clientWidth:", webcamRef.current?.video?.clientWidth, "clientHeight:", webcamRef.current?.video?.clientHeight); 
 
+                        if (webcamRef.current && webcamRef.current.video && 
+                            webcamRef.current.video.readyState === 4 && 
+                            (webcamRef.current.video.videoWidth > 0 || webcamRef.current.video.clientWidth > 0)) { 
+                            resolve(true); 
+                        } else if (attempts < maxAttempts) {
+                            attempts++;
+                            setTimeout(poll, interval);
+                        } else {
+                            reject(new Error("Webcam stream did not become fully ready for capture in time."));
+                        }
+                    };
+                    poll();
+                });
+            };
+
+            let imageSrc = null;
             try {
+                await checkWebcamReady(); 
+
+                const video = webcamRef.current.video;
+                const canvas = canvasRef.current;
+                let captureAttempts = 0;
+                const maxCaptureAttempts = 5; 
+
+                while (captureAttempts < maxCaptureAttempts) {
+                    console.log("DEBUG FRONTEND: Attempting canvas draw. Capture attempt:", captureAttempts);
+                    console.log("DEBUG FRONTEND: Video element dimensions (at draw start):", video.videoWidth, "x", video.videoHeight);
+                    console.log("DEBUG FRONTEND: Video element client dimensions (at draw start):", video.clientWidth, "x", video.clientHeight); 
+                    
+                    const sourceWidth = video.videoWidth > 0 ? video.videoWidth : video.clientWidth;
+                    const sourceHeight = video.videoHeight > 0 ? video.videoHeight : video.clientHeight;
+
+                    if (video && canvas && sourceWidth > 0 && sourceHeight > 0) {
+                        canvas.width = sourceWidth; 
+                        canvas.height = sourceHeight;
+                        let ctx = canvas.getContext('2d'); // FIX: Changed 'const ctx' to 'let ctx'
+                        
+                        // NEW: Obtain context with willReadFrequently attribute
+                        const contextAttributes = { willReadFrequently: true };
+                        const newCtx = canvas.getContext('2d', contextAttributes);
+                        if (newCtx) { 
+                            ctx = newCtx; // Reassign ctx if new context is obtained
+                        }
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height); 
+                        
+                        const imageData = ctx.getImageData(0,0,1,1).data;
+                        if(imageData[0] !== 0 || imageData[1] !== 0 || imageData[2] !== 0 || imageData[3] !== 0) {
+                            console.log("DEBUG FRONTEND: Canvas appears to have content (pixel check passed).");
+                            imageSrc = canvas.toDataURL('image/jpeg', 0.9); 
+                            break; 
+                        } else {
+                            console.warn("DEBUG FRONTEND: Canvas pixel check failed (image still empty). Retrying...");
+                            await new Promise(resolve => setTimeout(resolve, 100)); 
+                            captureAttempts++;
+                        }
+                    } else {
+                        console.error("DEBUG FRONTEND: Video or canvas not ready for drawing (dimensions 0x0). Retrying...");
+                        await new Promise(resolve => setTimeout(resolve, 100)); 
+                        captureAttempts++;
+                    }
+                }
+
+                console.log("DEBUG FRONTEND: imageSrc from canvas capture:", imageSrc);
+                console.log("DEBUG FRONTEND: imageSrc length:", imageSrc ? imageSrc.length : 'N/A');
+
+                if (!imageSrc || imageSrc.length < 50 || imageSrc.startsWith('data:,')) { 
+                    setFormError("Failed to capture image from webcam (imageSrc is empty or invalid data URL after retries).");
+                    setIsProcessingImage(false);
+                    return;
+                }
+
                 const response = await callScanWineLabelFunction({ image: imageSrc });
                 const { success, fullText } = response.data;
 
@@ -153,9 +231,9 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                 setIsScanning(false);
                 setScanResult('');
 
-            } catch (functionError) {
-                console.error("Error calling Cloud Function:", functionError);
-                setFormError(`Failed to scan label: ${functionError.message}. Please try again.`);
+            } catch (error) { 
+                console.error("Error during image capture or Cloud Function call:", error);
+                setFormError(`Failed to scan label: ${error.message}. Please try again.`);
                 setIsScanning(false);
             } finally {
                 setIsProcessingImage(false);
@@ -318,7 +396,10 @@ const WineFormModal = ({ isOpen, onClose, onSubmit, wine, allWines }) => {
                             height={300} // Adjust as needed
                             className="w-full h-full object-cover"
                             videoConstraints={{ facingMode: "environment" }} // Prefer rear camera on mobile
+                            key={webcamKey} // NEW: Add key to force remount
                         />
+                        {/* NEW: Hidden canvas for manual capture */}
+                        <canvas ref={canvasRef} style={{ display: 'none' }} /> 
                     </div>
                     {isProcessingImage && (
                         <p className="text-sm text-slate-500 dark:text-slate-400 mb-2 flex items-center">

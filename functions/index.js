@@ -1,17 +1,14 @@
 // functions/index.js
 
 const functions = require("firebase-functions");
-const { HttpsError } = require("firebase-functions/v2/https"); // HttpsError is now directly imported
+const { HttpsError } = require("firebase-functions/v2/https");
 const { ImageAnnotatorClient } = require("@google-cloud/vision");
 
 const visionClient = new ImageAnnotatorClient();
 
-// FIX: Explicitly set enforceAppCheck: false to bypass App Check verification for now
-//      This is a 2nd Gen Cloud Function definition.
 exports.scanWineLabel = functions.https.onCall(
   {enforceAppCheck: false},
   async (request) => {
-    // Log to console for debugging purposes, will appear in Cloud Functions logs
     console.log("Function scanWineLabel invoked (2nd Gen).");
     console.log("Authentication context (request.auth):", request.auth ? request.auth.uid : "None");
 
@@ -30,20 +27,18 @@ exports.scanWineLabel = functions.https.onCall(
       );
     }
 
-    // --- NEW DEBUG LOGS FOR IMAGE PROCESSING ---
-    console.log("DEBUG: Raw base64Image received (first 50 chars):", base64Image.substring(0, 50) + "...");
+    console.log("DEBUG: Raw base64Image received (first 100 chars):", base64Image.substring(0, 100) + "...");
     console.log("DEBUG: base64Image length:", base64Image.length);
 
     const splitResult = base64Image.split(",");
-    console.log("DEBUG: Result of split by comma:", splitResult);
-
     const base64Cleaned = splitResult[1]; // Get the part after the comma
-    console.log("DEBUG: base64Cleaned (first 50 chars):", base64Cleaned ? base64Cleaned.substring(0, 50) + "..." : "undefined/empty");
-    console.log("DEBUG: base64Cleaned length:", base64Cleaned ? base64Cleaned.length : "N/A");
-    // --- END NEW DEBUG LOGS ---
 
-    // Ensure base64Cleaned is valid before proceeding
-    if (!base64Cleaned) {
+    console.log("DEBUG: Result of split by comma (length):", splitResult.length);
+    console.log("DEBUG: Result of split by comma (part 0):", splitResult[0]);
+    console.log("DEBUG: Result of split by comma (part 1 first 100 chars):", base64Cleaned ? base64Cleaned.substring(0, 100) + "..." : "undefined/empty");
+    console.log("DEBUG: base64Cleaned length:", base64Cleaned ? base64Cleaned.length : "N/A");
+
+    if (!base64Cleaned || base64Cleaned.length === 0) {
         throw new HttpsError(
             "invalid-argument",
             "Could not extract valid Base64 image data after splitting.",
@@ -51,8 +46,13 @@ exports.scanWineLabel = functions.https.onCall(
     }
 
     try {
+      // FIX START: Convert the cleaned Base64 string to a Buffer
+      const imageBuffer = Buffer.from(base64Cleaned, "base64");
+      console.log("DEBUG: Converted image to Buffer. Buffer length:", imageBuffer.length);
+      // FIX END
+
       const image = {
-        content: base64Cleaned,
+        content: imageBuffer, // Pass the Buffer instead of the string
       };
 
       const [result] = await visionClient.textDetection(image);
