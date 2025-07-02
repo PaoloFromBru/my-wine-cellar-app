@@ -49,6 +49,7 @@ import DrinkSoonView from './views/DrinkSoonView.js';
 import FoodPairingView from './views/FoodPairingView.js';
 import ImportExportView from './views/ImportExportView.js';
 import ExperiencedWinesView from './views/ExperiencedWinesView.js';
+import HelpView from './views/HelpView.js'; // NEW: Import HelpView
 
 
 // --- Icons (kept here for simplicity, but can be further modularized if desired) ---
@@ -100,6 +101,13 @@ const CheckCircleIcon = ({className="w-5 h-5"}) => (
     </svg>
 );
 
+// NEW: QuestionMarkCircleIcon for the Help section (already defined in HelpView.js)
+const QuestionMarkCircleIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+    </svg>
+);
+
 
 // --- Firebase Config ---
 // Your web app's Firebase configuration
@@ -122,12 +130,12 @@ function App() {
 
     // --- Data and Auth Hooks ---
     const { auth, db, user, userId, isAuthReady, wines, experiencedWines, isLoadingData, dataError } = useFirebaseData();
-    const { authError, isLoadingAuth, login, register, logout, performInitialAuth, setExplicitlyLoggedOut } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined); // Destructure setExplicitlyLoggedOut
+    const { authError, isLoadingAuth, login, register, logout, performInitialAuth, setExplicitlyLoggedOut } = useAuthManager(auth, typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined); 
     
     // Wrapped setGlobalError in useCallback for stability when passing to hooks
     const setGlobalErrorCallback = useCallback((msg, type = 'error', timeout = 5000) => {
         setGlobalError({ message: msg, type: type });
-        if (type !== 'error') { // Auto-dismiss success/info/warning messages
+        if (type !== 'error') { 
             setTimeout(() => setGlobalError(null), timeout);
         }
     }, []);
@@ -165,6 +173,7 @@ function App() {
     const [csvImportStatus, setCsvImportStatus] = useState({ message: '', type: '', errors: [] });
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showRegisterModal, setShowRegisterModal] = useState(false);
+    // NEW: Add 'help' as a possible view state
     const [currentView, setCurrentView] = useState('myCellar'); 
     const [showExperienceWineModal, setShowExperienceWineModal] = useState(false);
     const [wineToExperience, setWineToExperience] = useState(null);
@@ -179,7 +188,6 @@ function App() {
 
     // Combined global error for display (prioritizing order)
     const currentDisplayError = useMemo(() => {
-        // globalError is now an object { message, type }
         return globalError?.message || dataError || authError || wineActionError || pairingError;
     }, [globalError, dataError, authError, wineActionError, pairingError]);
 
@@ -418,7 +426,6 @@ function App() {
 
     // --- Call initial auth logic on component mount ---
     useEffect(() => {
-        // Only perform initial auth if not explicitly logged out
         if (auth && !user && isAuthReady && !isLoadingAuth) {
             performInitialAuth();
         }
@@ -458,7 +465,7 @@ function App() {
                                 {user.isAnonymous ? `Guest (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)` : (user.email || `User (ID: ${userId ? userId.substring(0,8) : 'N/A'}...)`)}
                             </span>
                             <button
-                                onClick={logout} // This is the logout button
+                                onClick={logout} 
                                 className="p-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm flex items-center space-x-1"
                             >
                                 <LogoutIcon className="w-4 h-4" />
@@ -468,13 +475,13 @@ function App() {
                     ) : (
                         <div className="flex items-center space-x-3">
                             <button
-                                onClick={() => { setShowLoginModal(true); setExplicitlyLoggedOut(false); }} // Clear flag on explicit login/register
+                                onClick={() => setShowLoginModal(true)}
                                 className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold"
                             >
                                 Login
                             </button>
                             <button
-                                onClick={() => { setShowRegisterModal(true); setExplicitlyLoggedOut(false); }} // Clear flag on explicit login/register
+                                onClick={() => setShowRegisterModal(true)}
                                 className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
                             >
                                 Register
@@ -483,7 +490,7 @@ function App() {
                     )}
                 </div>
                  {/* Display global errors */}
-                 {currentDisplayError && <AlertMessage message={globalError.message} type={globalError.type} onDismiss={() => setGlobalError(null)} />}
+                 {currentDisplayError && <AlertMessage message={currentDisplayError} type={globalError.type} onDismiss={() => { setGlobalError(null); if (setFoodPairingError) setFoodPairingError(null); }} />}
             </header>
 
             <main className="container mx-auto">
@@ -492,13 +499,13 @@ function App() {
                         <p className="text-lg mb-4">Please Login or Register to manage your wine cellar.</p>
                         <div className="flex justify-center items-center space-x-3 mt-4">
                             <button
-                                onClick={() => { setShowLoginModal(true); setExplicitlyLoggedOut(false); }}
+                                onClick={() => setShowLoginModal(true)}
                                 className="px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white text-lg font-semibold"
                             >
                                 Login
                             </button>
                             <button
-                                onClick={() => { setShowRegisterModal(true); setExplicitlyLoggedOut(false); }}
+                                onClick={() => setShowRegisterModal(true)}
                                 className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold"
                             >
                                 Register
@@ -555,6 +562,16 @@ function App() {
                             >
                                 <CheckCircleIcon className="w-5 h-5" />
                                 <span>Experienced Wines</span>
+                            </button>
+                            {/* NEW: Help Button */}
+                            <button
+                                onClick={() => setCurrentView('help')}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                                    currentView === 'help' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                <QuestionMarkCircleIcon className="w-5 h-5" />
+                                <span>Help</span>
                             </button>
                         </nav>
 
@@ -616,6 +633,11 @@ function App() {
                                 experiencedWines={experiencedWines}
                                 confirmDeleteExperiencedWine={confirmDeleteExperiencedWine} 
                             />
+                        )}
+
+                        {/* NEW: Render HelpView */}
+                        {currentView === 'help' && (
+                            <HelpView />
                         )}
                     </>
                 )}
