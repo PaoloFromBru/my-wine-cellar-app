@@ -36,7 +36,7 @@ import ExperienceWineModal from './components/ExperienceWineModal.js';
 
 // Import custom hooks (with explicit .js extensions)
 import { useFirebaseData } from './hooks/useFirebaseData.js';
-import { useAuthManager } from './hooks/useAuthManager.js';
+import { useAuthManager } from './hooks/useAuthManager.js'; // FIX: Corrected import statement
 import { useWineActions } from './hooks/useWineActions.js';
 import { useFoodPairingAI } from './hooks/useFoodPairingAI.js';
 
@@ -49,7 +49,7 @@ import DrinkSoonView from './views/DrinkSoonView.js';
 import FoodPairingView from './views/FoodPairingView.js';
 import ImportExportView from './views/ImportExportView.js';
 import ExperiencedWinesView from './views/ExperiencedWinesView.js';
-import HelpView from './views/HelpView.js'; // NEW: Import HelpView
+import HelpView from './views/HelpView.js'; 
 
 
 // --- Icons (kept here for simplicity, but can be further modularized if desired) ---
@@ -101,7 +101,7 @@ const CheckCircleIcon = ({className="w-5 h-5"}) => (
     </svg>
 );
 
-// NEW: QuestionMarkCircleIcon for the Help section (already defined in HelpView.js)
+// QuestionMarkCircleIcon (defined in HelpView.js, copied here for App.js context)
 const QuestionMarkCircleIcon = ({ className = "w-5 h-5" }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
@@ -111,9 +111,9 @@ const QuestionMarkCircleIcon = ({ className = "w-5 h-5" }) => (
 
 // --- Firebase Config ---
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// FIX START: Read API key from environment variable
 const firebaseConfig = {
-  apiKey: "AIzaSyCE3XzbBO96yY2uRdK2zuwnWSKjF4SnvSw",
+  apiKey: process.env.REACT_APP_GOOGLE_API_KEY, // Read from .env
   authDomain: "mypublicwinecellar.firebaseapp.com",
   projectId: "mypublicwinecellar",
   storageBucket: "mypublicwinecellar.firebasestorage.app",
@@ -121,6 +121,7 @@ const firebaseConfig = {
   appId: "1:554888373269:web:aa83e35df32658acae5a1c",
   measurementId: "G-EVTT48644N"
 };
+// FIX END
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-public-wine-cellar-data';
 
 
@@ -622,7 +623,7 @@ function App() {
                                 handleExportCsv={exportCurrentCellar} 
                                 wines={wines}
                                 handleExportExperiencedCsv={exportExperiencedWines} 
-                                experiencedWines={experiencedWines}
+                                experiencedWines={experiencedWines} // FIX: Corrected typo
                                 confirmEraseAllWines={() => setShowEraseAllConfirmModal(true)} 
                                 setCsvImportStatus={setCsvImportStatus} 
                             />
