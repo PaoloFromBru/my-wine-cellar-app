@@ -86,6 +86,7 @@ export const useFoodPairingAI = (setError) => {
         const prompt = `Given the food item: "${foodItem}", and the following wines from my cellar:\n\n${wineListText}\n\nSuggest 1-3 wines from the list that would pair well with "${foodItem}". If no good pairing exists, state that. Focus only on the provided wine list.`;
 
         const geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY; // Re-get API key for this function too
+        console.log("DEBUG AI: API Key (first 5 chars):", geminiApiKey ? geminiApiKey.substring(0,5) + "..." : "NOT SET");
 
         if (!geminiApiKey) {
             setPairingError("Gemini API key is not configured for reverse pairing.");

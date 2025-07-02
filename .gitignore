@@ -24,3 +24,5 @@ yarn-error.log*
 
 # dotenv config
 .env
+.env.txt
+
