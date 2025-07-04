@@ -48,4 +48,3 @@ export default function useFoodPairingAI() {
 
   return { callGeminiProxy, response, loading, error };
 }
-export default useFoodPairingAI;
