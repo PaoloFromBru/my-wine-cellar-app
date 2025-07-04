@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     const suggestion = result.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received';
     return res.status(200).json({ suggestion });
   } catch (err) {
-    console.error('Gemini proxy error:', err);
-    return res.status(500).json({ error: 'Server error: ' + err.message });
-  }
+  		console.error('Gemini proxy error:', err); // Vercel will log this
+  		return res.status(500).json({ error: 'Server error: ' + err.message });
+    }
 }

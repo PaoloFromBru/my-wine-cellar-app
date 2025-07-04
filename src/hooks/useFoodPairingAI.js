@@ -6,7 +6,8 @@ export const useFoodPairingAI = (setError) => {
   const [pairingError, setPairingError] = useState(null);
 
   // Change this if deployed (e.g., "/api/gemini" or Vercel URL)
-  const GEMINI_PROXY_URL = 'http://localhost:5001/api/gemini';
+//  const GEMINI_PROXY_URL = 'http://localhost:5001/api/gemini';
+  const GEMINI_PROXY_URL = '/api/gemini'; // ✅ relative path works on Vercel too
 
   const callGeminiProxy = async (prompt, contextLabel = '') => {
     console.log(`${contextLabel} 🧠 Prompt:`, prompt);
