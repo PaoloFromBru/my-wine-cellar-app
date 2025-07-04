@@ -1,144 +1,90 @@
-// src/hooks/useFoodPairingAI.js
 import { useState, useCallback } from 'react';
 
 export const useFoodPairingAI = (setError) => {
-    const [foodPairingSuggestion, setFoodPairingSuggestion] = useState(null);
-    const [isLoadingPairing, setIsLoadingPairing] = useState(false);
-    const [pairingError, setPairingError] = useState(null);
+  const [foodPairingSuggestion, setFoodPairingSuggestion] = useState(null);
+  const [isLoadingPairing, setIsLoadingPairing] = useState(false);
+  const [pairingError, setPairingError] = useState(null);
 
-    const fetchFoodPairing = useCallback(async (wine) => {
-        setIsLoadingPairing(true);
-        setPairingError(null);
-        setFoodPairingSuggestion(null);
+  // Change this if deployed (e.g., "/api/gemini" or Vercel URL)
+  const GEMINI_PROXY_URL = 'http://localhost:5001/api/gemini';
 
-        // --- NEW DEBUG LOG ---
-        const geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY;
-        console.log("DEBUG AI: API Key (first 5 chars):", geminiApiKey ? geminiApiKey.substring(0,5) + "..." : "NOT SET");
-        // --- END NEW DEBUG LOG ---
+  const callGeminiProxy = async (prompt, contextLabel = '') => {
+    console.log(`${contextLabel} 🧠 Prompt:`, prompt);
 
-        if (!geminiApiKey) {
-            setPairingError("Gemini API key is not configured.");
-            setError("Gemini API key is missing. Please check .env setup.", 'error');
-            setIsLoadingPairing(false);
-            return;
-        }
+    try {
+      const response = await fetch(GEMINI_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
 
-        if (!wine || (!wine.name && !wine.producer && !wine.region)) {
-            setPairingError("Please select a wine with enough details for pairing.");
-            return;
-        }
+      const data = await response.json();
 
-        const wineDetails = `Wine Name: ${wine.name || 'N/A'}, Producer: ${wine.producer || 'N/A'}, Region: ${wine.region || 'N/A'}, Color: ${wine.color || 'N/A'}, Year: ${wine.year || 'N/A'}`;
-        const prompt = `Given the wine: ${wineDetails}, what are 3-5 great food pairing suggestions? Provide concise suggestions.`;
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro-001:generateContent?key=${geminiApiKey}`; // Ensure this model supports text-only input
+      return data.suggestion || 'No suggestion received.';
+    } catch (err) {
+      console.error(`${contextLabel} ❌ Proxy error:`, err);
+      setPairingError(`Failed: ${err.message}`);
+      setError(`Gemini proxy error: ${err.message}`, 'error');
+      return null;
+    }
+  };
 
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                }),
-            });
+  const fetchFoodPairing = useCallback(async (wine) => {
+    setIsLoadingPairing(true);
+    setPairingError(null);
+    setFoodPairingSuggestion(null);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("Gemini API error response:", errorData);
-                throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-            }
+    if (!wine || (!wine.name && !wine.producer && !wine.region)) {
+      setPairingError('Please select a wine with enough details for pairing.');
+      setIsLoadingPairing(false);
+      return;
+    }
 
-            const data = await response.json();
-            const suggestion = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const wineDetails = `Wine Name: ${wine.name || 'N/A'}, Producer: ${wine.producer || 'N/A'}, Region: ${wine.region || 'N/A'}, Color: ${wine.color || 'N/A'}, Year: ${wine.year || 'N/A'}`;
+    const prompt = `Given the wine: ${wineDetails}, what are 3-5 great food pairing suggestions? Provide concise suggestions.`;
 
-            if (suggestion) {
-                setFoodPairingSuggestion(suggestion);
-            } else {
-                setFoodPairingSuggestion("No specific pairing suggestion found.");
-            }
-        } catch (err) {
-            console.error("Error fetching food pairing:", err);
-            setPairingError(`Failed to get suggestion: ${err.message}`);
-            setError(`Failed to get suggestion: ${err.message}`, 'error');
-        } finally {
-            setIsLoadingPairing(false);
-        }
-    }, [setError]);
+    const suggestion = await callGeminiProxy(prompt, '[FoodPairing]');
+    if (suggestion) setFoodPairingSuggestion(suggestion);
 
-    // ... (findWineForFood and other functions remain unchanged)
-    const findWineForFood = useCallback(async (foodItem, allWines) => {
-        setIsLoadingPairing(true);
-        setPairingError(null);
-        setFoodPairingSuggestion(null); // Clear previous suggestions
+    setIsLoadingPairing(false);
+  }, [setError]);
 
-        if (!foodItem) {
-            setPairingError("Please enter a food item for reverse pairing.");
-            setIsLoadingPairing(false);
-            return;
-        }
+  const findWineForFood = useCallback(async (foodItem, allWines) => {
+    setIsLoadingPairing(true);
+    setPairingError(null);
+    setFoodPairingSuggestion(null);
 
-        const wineListText = allWines.map(wine =>
-            `Name: ${wine.name || 'N/A'}, Producer: ${wine.producer || 'N/A'}, Region: ${wine.region || 'N/A'}, Color: ${wine.color || 'N/A'}, Year: ${wine.year || 'N/A'}`
-        ).join('\n');
+    if (!foodItem) {
+      setPairingError('Please enter a food item.');
+      setIsLoadingPairing(false);
+      return;
+    }
 
-        const prompt = `Given the food item: "${foodItem}", and the following wines from my cellar:\n\n${wineListText}\n\nSuggest 1-3 wines from the list that would pair well with "${foodItem}". If no good pairing exists, state that. Focus only on the provided wine list.`;
+	const topWines = allWines; // use the entire wine list
 
-        const geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY; // Re-get API key for this function too
-        console.log("DEBUG AI: API Key (first 5 chars):", geminiApiKey ? geminiApiKey.substring(0,5) + "..." : "NOT SET");
+    const wineListText = topWines.map(wine =>
+      `Name: ${wine.name || 'N/A'}, Producer: ${wine.producer || 'N/A'}, Region: ${wine.region || 'N/A'}, Color: ${wine.color || 'N/A'}, Year: ${wine.year || 'N/A'}`
+    ).join('\n');
 
-        if (!geminiApiKey) {
-            setPairingError("Gemini API key is not configured for reverse pairing.");
-            setError("Gemini API key is missing. Please check .env setup.", 'error');
-            setIsLoadingPairing(false);
-            return;
-        }
+    const prompt = `Given the food item: "${foodItem}", and the following wines from my cellar:\n\n${wineListText}\n\nSuggest 1-3 wines from the list that would pair well with "${foodItem}". Focus only on the provided wine list.`;
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro-001:generateContent?key=${geminiApiKey}`;
+    const suggestion = await callGeminiProxy(prompt, '[ReversePairing]');
+    if (suggestion) setFoodPairingSuggestion(suggestion);
 
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                }),
-            });
+    setIsLoadingPairing(false);
+  }, [setError]);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("Gemini API reverse pairing error response:", errorData);
-                throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-            }
-
-            const data = await response.json();
-            const suggestion = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (suggestion) {
-                setFoodPairingSuggestion(suggestion);
-            } else {
-                setFoodPairingSuggestion("No specific reverse pairing suggestion found.");
-            }
-        } catch (err) {
-            console.error("Error fetching reverse food pairing:", err);
-            setPairingError(`Failed to get reverse suggestion: ${err.message}`);
-            setError(`Failed to get reverse suggestion: ${err.message}`, 'error');
-        } finally {
-            setIsLoadingPairing(false);
-        }
-    }, [setError]);
-
-
-    return {
-        foodPairingSuggestion,
-        isLoadingPairing,
-        pairingError,
-        fetchFoodPairing,
-        findWineForFood,
-        setFoodPairingSuggestion,
-        setPairingError
-    };
+  return {
+    foodPairingSuggestion,
+    isLoadingPairing,
+    pairingError,
+    fetchFoodPairing,
+    findWineForFood,
+    setFoodPairingSuggestion,
+    setPairingError,
+  };
 };
