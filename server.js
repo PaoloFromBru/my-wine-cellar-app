@@ -1,8 +1,13 @@
 // server.js
-import express from 'express';
-import dotenv from 'dotenv';
-import fetch from 'node-fetch';
-import cors from 'cors';
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+
+// Use the built-in fetch available in Node 18+ or fall back to node-fetch
+const fetchFn =
+  typeof fetch === 'function'
+    ? fetch
+    : (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const app = express();
 
@@ -33,7 +38,7 @@ app.post('/api/gemini', async (req, res) => {
   }
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
