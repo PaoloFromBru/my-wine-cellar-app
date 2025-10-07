@@ -26,7 +26,6 @@ const PORT = process.env.PORT || 5001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
 const GEMINI_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
 
 const normaliseModel = (model) => {
   if (!model || typeof model !== 'string') {
@@ -35,6 +34,8 @@ const normaliseModel = (model) => {
 
   return model.startsWith('models/') ? model.slice('models/'.length) : model;
 };
+
+const DEFAULT_MODEL = normaliseModel(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
 
 const buildGeminiUrl = (model, apiKey) =>
   `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
@@ -55,21 +56,28 @@ app.post('/api/gemini', async (req, res) => {
   const requestedModel = normaliseModel(body.model);
   const model = requestedModel || DEFAULT_MODEL;
 
-  const payload = {
-    ...body,
-    contents:
-      Array.isArray(body.contents) && body.contents.length > 0
-        ? body.contents
-        : [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-    model: `models/${model}`,
-  };
+  const {
+    model: _ignoredModel,
+    prompt: _ignoredPrompt,
+    contents: incomingContents,
+    ...restBody
+  } = body;
 
-  delete payload.prompt;
+  const payloadContents =
+    Array.isArray(incomingContents) && incomingContents.length > 0
+      ? incomingContents
+      : [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ];
+
+  const buildPayloadForModel = (modelName) => ({
+    ...restBody,
+    contents: payloadContents,
+    model: `models/${modelName}`,
+  });
 
   const fetchAvailableModels = async () => {
     try {
@@ -86,31 +94,95 @@ app.post('/api/gemini', async (req, res) => {
     }
   };
 
-  try {
-    const response = await fetchFn(buildGeminiUrl(model, GEMINI_API_KEY), {
+  const attemptGeminiCall = async (modelName) => {
+    const response = await fetchFn(buildGeminiUrl(modelName, GEMINI_API_KEY), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPayloadForModel(modelName)),
     });
 
-    const result = await response.json();
+    const rawText = await response.text();
+    let parsed;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (error) {
+      parsed = null;
+    }
 
-    if (!response.ok) {
-      if (response.status === 404) {
+    return {
+      response,
+      parsed,
+      rawText,
+      modelName,
+    };
+  };
+
+  try {
+    const primaryAttempt = await attemptGeminiCall(model);
+
+    if (primaryAttempt.response.ok) {
+      res.set('x-gemini-model-used', primaryAttempt.modelName);
+      const suggestion =
+        primaryAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
+      return res.status(200).json({ suggestion });
+    }
+
+    const attemptedModels = [primaryAttempt.modelName];
+
+    if (primaryAttempt.response.status === 404 && primaryAttempt.modelName !== DEFAULT_MODEL) {
+      const fallbackAttempt = await attemptGeminiCall(DEFAULT_MODEL);
+      attemptedModels.push(DEFAULT_MODEL);
+
+      if (fallbackAttempt.response.ok) {
+        res.set('x-gemini-model-used', fallbackAttempt.modelName);
+        res.set('x-gemini-model-fallback', primaryAttempt.modelName);
+        const suggestion =
+          fallbackAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
+        return res.status(200).json({ suggestion });
+      }
+
+      if (fallbackAttempt.response.status === 404) {
         const availableModels = await fetchAvailableModels();
+        const unavailableMessage = `Model(s) ${attemptedModels
+          .map((name) => `"${name}"`)
+          .join(', ')} are not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
         return res.status(404).json({
-          error:
-            result.error?.message ||
-            `Model "${model}" is not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`,
+          error: unavailableMessage,
           availableModels,
+          attemptedModels,
+          rawError: fallbackAttempt.parsed || fallbackAttempt.rawText || null,
         });
       }
 
-      return res.status(response.status).json({ error: result.error?.message || 'Unknown API error' });
+      return res.status(fallbackAttempt.response.status).json({
+        error:
+          fallbackAttempt.parsed?.error?.message ||
+          fallbackAttempt.parsed?.error ||
+          fallbackAttempt.rawText ||
+          `Gemini API Error (HTTP ${fallbackAttempt.response.status}).`,
+        attemptedModels,
+      });
     }
 
-    const suggestion = result.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
-    return res.status(200).json({ suggestion });
+    if (primaryAttempt.response.status === 404) {
+      const availableModels = await fetchAvailableModels();
+      const notFoundMessage = `Model "${primaryAttempt.modelName}" is not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
+      return res.status(404).json({
+        error: notFoundMessage,
+        availableModels,
+        attemptedModels,
+        rawError: primaryAttempt.parsed || primaryAttempt.rawText || null,
+      });
+    }
+
+    return res.status(primaryAttempt.response.status).json({
+      error:
+        primaryAttempt.parsed?.error?.message ||
+        primaryAttempt.parsed?.error ||
+        primaryAttempt.rawText ||
+        `Gemini API Error (HTTP ${primaryAttempt.response.status}).`,
+      attemptedModels,
+    });
   } catch (err) {
     console.error('[Gemini Proxy Error]', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
