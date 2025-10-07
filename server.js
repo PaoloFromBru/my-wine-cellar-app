@@ -26,7 +26,6 @@ const PORT = process.env.PORT || 5001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
 const GEMINI_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
 
 const normaliseModel = (model) => {
   if (!model || typeof model !== 'string') {
@@ -35,6 +34,8 @@ const normaliseModel = (model) => {
 
   return model.startsWith('models/') ? model.slice('models/'.length) : model;
 };
+
+const DEFAULT_MODEL = normaliseModel(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
 
 const buildGeminiUrl = (model, apiKey) =>
   `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
