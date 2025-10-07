@@ -2,6 +2,18 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Gemini configuration & troubleshooting
+
+The AI pairing features depend on Google AI Studio's Gemini API.
+
+1. Set the required environment variable `GEMINI_API_KEY` in both the frontend (Next.js API route) and in the optional Express proxy (`server.js`).
+2. (Optional) Override the defaults via:
+   - `GEMINI_MODEL` (defaults to `gemini-1.5-flash-latest`)
+   - `GEMINI_API_VERSION` (defaults to `v1beta`)
+   - `GEMINI_API_BASE_URL` (defaults to `https://generativelanguage.googleapis.com`)
+
+When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
+
 ## Available Scripts
 
 In the project directory, you can run:
