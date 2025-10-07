@@ -44,37 +44,97 @@ export default async function handler(req, res) {
   const requestedModel = normaliseModel(requestBody.model);
   const model = requestedModel || DEFAULT_MODEL;
 
-  const payload = {
-    ...requestBody,
-    model: `models/${model}`,
-  };
+  const { model: _ignoredModel, ...restRequestBody } = requestBody;
+  const buildPayloadForModel = (modelName) => ({
+    ...restRequestBody,
+    model: `models/${modelName}`,
+  });
 
-  const geminiUrl = buildGeminiUrl(model, apiKey);
-
-  try {
-    const geminiRes = await fetch(geminiUrl, {
+  const attemptGeminiCall = async (modelName) => {
+    const response = await fetch(buildGeminiUrl(modelName, apiKey), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPayloadForModel(modelName)),
     });
 
-    if (!geminiRes.ok) {
-      if (geminiRes.status === 404) {
+    const rawText = await response.text();
+    let parsed;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (error) {
+      parsed = null;
+    }
+
+    return {
+      response,
+      parsed,
+      rawText,
+      modelName,
+    };
+  };
+
+  try {
+    const primaryAttempt = await attemptGeminiCall(model);
+
+    if (primaryAttempt.response.ok) {
+      res.setHeader('x-gemini-model-used', primaryAttempt.modelName);
+      return res.status(200).json(primaryAttempt.parsed || {});
+    }
+
+    const attemptedModels = [primaryAttempt.modelName];
+
+    if (primaryAttempt.response.status === 404 && primaryAttempt.modelName !== DEFAULT_MODEL) {
+      const fallbackAttempt = await attemptGeminiCall(DEFAULT_MODEL);
+      attemptedModels.push(DEFAULT_MODEL);
+
+      if (fallbackAttempt.response.ok) {
+        res.setHeader('x-gemini-model-used', fallbackAttempt.modelName);
+        res.setHeader('x-gemini-model-fallback', primaryAttempt.modelName);
+        return res.status(200).json(fallbackAttempt.parsed || {});
+      }
+
+      if (fallbackAttempt.response.status === 404) {
         const availableModels = await fetchAvailableModels(apiKey);
         return res.status(404).json({
-          error: `Gemini API Error: Model "${model}" is not available for API version "${API_VERSION}" at ${API_BASE_URL}.`,
+          error: `Gemini API Error: Requested models ${attemptedModels
+            .map((name) => `"${name}"`)
+            .join(', ')} are not available for API version "${API_VERSION}" at ${API_BASE_URL}.`,
           availableModels,
+          attemptedModels,
+          rawError: fallbackAttempt.parsed || fallbackAttempt.rawText || null,
         });
       }
 
-      const errorText = await geminiRes.text();
-      return res.status(geminiRes.status).json({ error: `Gemini API Error: ${errorText}` });
+      return res.status(fallbackAttempt.response.status).json({
+        error:
+          fallbackAttempt.parsed?.error?.message ||
+          fallbackAttempt.parsed?.error ||
+          fallbackAttempt.rawText ||
+          `Gemini API Error (HTTP ${fallbackAttempt.response.status}).`,
+        attemptedModels,
+      });
     }
 
-    const data = await geminiRes.json();
-    return res.status(200).json(data);
+    if (primaryAttempt.response.status === 404) {
+      const availableModels = await fetchAvailableModels(apiKey);
+      return res.status(404).json({
+        error: `Gemini API Error: Model "${primaryAttempt.modelName}" is not available for API version "${API_VERSION}" at ${API_BASE_URL}.`,
+        availableModels,
+        attemptedModels,
+        rawError: primaryAttempt.parsed || primaryAttempt.rawText || null,
+      });
+    }
+
+    return res.status(primaryAttempt.response.status).json({
+      error:
+        primaryAttempt.parsed?.error?.message ||
+        primaryAttempt.parsed?.error ||
+        primaryAttempt.rawText ||
+        `Gemini API Error (HTTP ${primaryAttempt.response.status}).`,
+      attemptedModels,
+    });
   } catch (err) {
     return res.status(500).json({ error: `Proxy Error: ${err.message}` });
   }

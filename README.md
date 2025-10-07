@@ -12,7 +12,9 @@ The AI pairing features depend on Google AI Studio's Gemini API.
    - `GEMINI_API_VERSION` (defaults to `v1beta`)
    - `GEMINI_API_BASE_URL` (defaults to `https://generativelanguage.googleapis.com`)
 
-When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
+If a request references a retired model, the proxy will transparently retry with the default `models/gemini-2.5-flash` model and include `x-gemini-model-used` (plus `x-gemini-model-fallback` when applicable) headers so you can confirm which model ultimately served the response.
+
+When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field alongside the `attemptedModels` that failed. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
 
 ## Available Scripts
 
