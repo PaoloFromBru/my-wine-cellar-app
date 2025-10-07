@@ -9,7 +9,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Gemini API key in environment variables.' });
   }
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // The Gemini Flash 1.5 model is only available on the v1beta API.
+  // Using the latest alias keeps the integration working as Google retires specific revisions.
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
 
   try {
     const geminiRes = await fetch(geminiUrl, {
