@@ -24,31 +24,88 @@ console.log("✅ Loaded GEMINI_API_KEY:", !!process.env.GEMINI_API_KEY ? "YES" :
 
 const PORT = process.env.PORT || 5001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
+const GEMINI_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
+
+const normaliseModel = (model) => {
+  if (!model || typeof model !== 'string') {
+    return null;
+  }
+
+  return model.startsWith('models/') ? model.slice('models/'.length) : model;
+};
+
+const buildGeminiUrl = (model, apiKey) =>
+  `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
 
 app.use(express.json());
 
 app.post('/api/gemini', async (req, res) => {
-  const { prompt } = req.body;
+  const body = req.body || {};
+  const { prompt } = body;
 
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'Missing Gemini API key.' });
   }
-  if (!prompt) {
-    return res.status(400).json({ error: 'Missing prompt text.' });
+  if (!prompt && !Array.isArray(body.contents)) {
+    return res.status(400).json({ error: 'Missing prompt text or contents array.' });
   }
 
+  const requestedModel = normaliseModel(body.model);
+  const model = requestedModel || DEFAULT_MODEL;
+
+  const payload = {
+    ...body,
+    contents:
+      Array.isArray(body.contents) && body.contents.length > 0
+        ? body.contents
+        : [
+            {
+              role: 'user',
+              parts: [{ text: prompt }],
+            },
+          ],
+    model: `models/${model}`,
+  };
+
+  delete payload.prompt;
+
+  const fetchAvailableModels = async () => {
+    try {
+      const listRes = await fetchFn(`${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models?key=${GEMINI_API_KEY}`);
+      if (!listRes.ok) {
+        return null;
+      }
+
+      const listJson = await listRes.json();
+      return listJson?.models?.map((item) => item?.name).filter(Boolean) || null;
+    } catch (error) {
+      console.error('[Gemini Proxy] Failed to list models:', error);
+      return null;
+    }
+  };
+
   try {
-    const response = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetchFn(buildGeminiUrl(model, GEMINI_API_KEY), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      }),
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();
 
     if (!response.ok) {
+      if (response.status === 404) {
+        const availableModels = await fetchAvailableModels();
+        return res.status(404).json({
+          error:
+            result.error?.message ||
+            `Model "${model}" is not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`,
+          availableModels,
+        });
+      }
+
       return res.status(response.status).json({ error: result.error?.message || 'Unknown API error' });
     }
 
