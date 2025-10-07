@@ -1,4 +1,3 @@
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
 const API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
 const API_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
 
@@ -9,6 +8,8 @@ const normaliseModel = (model) => {
 
   return model.startsWith('models/') ? model.slice('models/'.length) : model;
 };
+
+const DEFAULT_MODEL = normaliseModel(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
 
 const buildGeminiUrl = (model, apiKey) =>
   `${API_BASE_URL}/${API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
