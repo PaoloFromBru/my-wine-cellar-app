@@ -26,7 +26,6 @@ const PORT = process.env.PORT || 5001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
 const GEMINI_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
 
 const normaliseModel = (model) => {
   if (!model || typeof model !== 'string') {
@@ -35,6 +34,10 @@ const normaliseModel = (model) => {
 
   return model.startsWith('models/') ? model.slice('models/'.length) : model;
 };
+
+const STABLE_MODEL = 'gemini-2.5-flash';
+const ENV_CONFIGURED_MODEL = normaliseModel(process.env.GEMINI_MODEL);
+const DEFAULT_MODEL = ENV_CONFIGURED_MODEL || STABLE_MODEL;
 
 const buildGeminiUrl = (model, apiKey) =>
   `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
@@ -53,23 +56,50 @@ app.post('/api/gemini', async (req, res) => {
   }
 
   const requestedModel = normaliseModel(body.model);
-  const model = requestedModel || DEFAULT_MODEL;
+  const primaryModel = requestedModel || DEFAULT_MODEL;
 
-  const payload = {
-    ...body,
-    contents:
-      Array.isArray(body.contents) && body.contents.length > 0
-        ? body.contents
-        : [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-    model: `models/${model}`,
+  const fallbackQueue = [];
+  const enqueueFallback = (candidate) => {
+    if (!candidate) {
+      return;
+    }
+
+    if (candidate === primaryModel) {
+      return;
+    }
+
+    if (fallbackQueue.includes(candidate)) {
+      return;
+    }
+
+    fallbackQueue.push(candidate);
   };
 
-  delete payload.prompt;
+  enqueueFallback(DEFAULT_MODEL);
+  enqueueFallback(STABLE_MODEL);
+
+  const {
+    model: _ignoredModel,
+    prompt: _ignoredPrompt,
+    contents: incomingContents,
+    ...restBody
+  } = body;
+
+  const payloadContents =
+    Array.isArray(incomingContents) && incomingContents.length > 0
+      ? incomingContents
+      : [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ];
+
+  const buildPayloadForModel = (modelName) => ({
+    ...restBody,
+    contents: payloadContents,
+    model: `models/${modelName}`,
+  });
 
   const fetchAvailableModels = async () => {
     try {
@@ -86,31 +116,94 @@ app.post('/api/gemini', async (req, res) => {
     }
   };
 
-  try {
-    const response = await fetchFn(buildGeminiUrl(model, GEMINI_API_KEY), {
+  const attemptGeminiCall = async (modelName) => {
+    const response = await fetchFn(buildGeminiUrl(modelName, GEMINI_API_KEY), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPayloadForModel(modelName)),
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        const availableModels = await fetchAvailableModels();
-        return res.status(404).json({
-          error:
-            result.error?.message ||
-            `Model "${model}" is not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`,
-          availableModels,
-        });
-      }
-
-      return res.status(response.status).json({ error: result.error?.message || 'Unknown API error' });
+    const rawText = await response.text();
+    let parsed;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (error) {
+      parsed = null;
     }
 
-    const suggestion = result.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
-    return res.status(200).json({ suggestion });
+    return {
+      response,
+      parsed,
+      rawText,
+      modelName,
+    };
+  };
+
+  try {
+    const attempts = [];
+    const modelsToTry = [primaryModel, ...fallbackQueue];
+    let successfulAttempt = null;
+
+    for (const modelName of modelsToTry) {
+      const attempt = await attemptGeminiCall(modelName);
+      attempts.push(attempt);
+
+      if (attempt.response.ok) {
+        successfulAttempt = attempt;
+        break;
+      }
+
+      if (attempt.response.status !== 404) {
+        break;
+      }
+    }
+
+    const attemptedModels = attempts.map((attempt) => attempt.modelName);
+
+    if (successfulAttempt) {
+      const modelUsed = successfulAttempt.modelName;
+      const firstAttemptModel = attempts[0]?.modelName;
+
+      res.set('x-gemini-model-used', modelUsed);
+      if (firstAttemptModel && firstAttemptModel !== modelUsed) {
+        res.set('x-gemini-model-fallback', firstAttemptModel);
+      }
+
+      const suggestion =
+        successfulAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
+      return res.status(200).json({ suggestion });
+    }
+
+    const lastAttempt = attempts[attempts.length - 1];
+
+    if (!lastAttempt) {
+      throw new Error('Gemini proxy failed before attempting any models.');
+    }
+
+    if (lastAttempt.response.status === 404) {
+      const availableModels = await fetchAvailableModels();
+      const unavailableMessage = `Model(s) ${attemptedModels
+        .map((name) => `"${name}"`)
+        .join(', ')} are not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
+
+      return res.status(404).json({
+        error: unavailableMessage,
+        availableModels,
+        attemptedModels,
+        recommendedModel: `models/${STABLE_MODEL}`,
+        envModel: ENV_CONFIGURED_MODEL ? `models/${ENV_CONFIGURED_MODEL}` : null,
+        rawError: lastAttempt.parsed || lastAttempt.rawText || null,
+      });
+    }
+
+    return res.status(lastAttempt.response.status).json({
+      error:
+        lastAttempt.parsed?.error?.message ||
+        lastAttempt.parsed?.error ||
+        lastAttempt.rawText ||
+        `Gemini API Error (HTTP ${lastAttempt.response.status}).`,
+      attemptedModels,
+    });
   } catch (err) {
     console.error('[Gemini Proxy Error]', err);
     res.status(500).json({ error: 'Server error: ' + err.message });

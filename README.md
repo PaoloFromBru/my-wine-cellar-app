@@ -8,11 +8,13 @@ The AI pairing features depend on Google AI Studio's Gemini API.
 
 1. Set the required environment variable `GEMINI_API_KEY` in both the frontend (Next.js API route) and in the optional Express proxy (`server.js`).
 2. (Optional) Override the defaults via:
-   - `GEMINI_MODEL` (defaults to `gemini-1.5-flash-latest`)
+   - `GEMINI_MODEL` (defaults to `models/gemini-2.5-flash`)
    - `GEMINI_API_VERSION` (defaults to `v1beta`)
    - `GEMINI_API_BASE_URL` (defaults to `https://generativelanguage.googleapis.com`)
 
-When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
+If a request references a retired model, the proxy walks through a fallback chain that always includes the stable `models/gemini-2.5-flash` release. Successful responses expose `x-gemini-model-used` (plus `x-gemini-model-fallback` when applicable) headers so you can confirm which model ultimately served the response.
+
+When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field alongside the `attemptedModels` that failed. The JSON payload also echoes your current `GEMINI_MODEL` value (when set) and provides a `recommendedModel` you can copy into your environment. Use that response to pick a supported model/version combination and update your `.env` settings accordingly before redeploying.
 
 ## Available Scripts
 
