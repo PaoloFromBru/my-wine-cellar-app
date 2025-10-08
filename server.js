@@ -33,6 +33,28 @@ const CHAT_COMPLETIONS_PATH = process.env.OPENAI_CHAT_COMPLETIONS_PATH || '/v1/c
 const buildCompletionsUrl = () =>
   `${OPENAI_BASE_URL}${CHAT_COMPLETIONS_PATH.startsWith('/') ? '' : '/'}${CHAT_COMPLETIONS_PATH}`;
 
+const shouldIgnoreRequestedModel = (model) => {
+  if (typeof model !== 'string') {
+    return true;
+  }
+
+  const trimmed = model.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  return /^models\//.test(trimmed) || trimmed.includes(':');
+};
+
+const resolveModel = (model) => {
+  if (!shouldIgnoreRequestedModel(model)) {
+    return model.trim();
+  }
+
+  return OPENAI_MODEL;
+};
+
 const normaliseMessages = (body) => {
   if (!body || typeof body !== 'object') {
     return null;
@@ -113,7 +135,7 @@ app.post('/api/openai', async (req, res) => {
 
   const payload = {
     ...restBody,
-    model: requestedModel || OPENAI_MODEL,
+    model: resolveModel(requestedModel),
     messages,
   };
 
