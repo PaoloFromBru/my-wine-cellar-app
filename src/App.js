@@ -645,8 +645,23 @@ function App() {
 
                 {/* Modals (remain outside conditional rendering to be accessible from all views) */}
                 <WineFormModal isOpen={showWineFormModal} onClose={() => { setShowWineFormModal(false); setCurrentWineToEdit(null); }} onSubmit={currentWineToEdit ? (data) => handleUpdateWine(currentWineToEdit.id, data, wines) : (data) => handleAddWine(data, wines)} wine={currentWineToEdit} allWines={wines} />
-                <FoodPairingModal isOpen={showFoodPairingModal} onClose={() => setShowFoodPairingModal(false)} wine={selectedWineForPairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} onFetchPairing={() => fetchFoodPairing(selectedWineForPairing)} />
-                <ReverseFoodPairingModal isOpen={showReversePairingModal} onClose={() => setShowReversePairingModal(false)} foodItem={foodForReversePairing} suggestion={foodPairingSuggestion} isLoading={isLoadingPairing} />
+                <FoodPairingModal
+                    isOpen={showFoodPairingModal}
+                    onClose={() => setShowFoodPairingModal(false)}
+                    wine={selectedWineForPairing}
+                    suggestion={foodPairingSuggestion}
+                    isLoading={isLoadingPairing}
+                    onFetchPairing={() => fetchFoodPairing(selectedWineForPairing)}
+                    errorMessage={pairingError}
+                />
+                <ReverseFoodPairingModal
+                    isOpen={showReversePairingModal}
+                    onClose={() => setShowReversePairingModal(false)}
+                    foodItem={foodForReversePairing}
+                    suggestion={foodPairingSuggestion}
+                    isLoading={isLoadingPairing}
+                    errorMessage={pairingError}
+                />
                 
                 {/* Delete Active Wine Confirmation Modal */}
                 <Modal isOpen={showDeleteConfirmModal} onClose={() => setShowDeleteConfirmModal(false)} title="Confirm Permanent Deletion">
