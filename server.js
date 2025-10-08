@@ -11,205 +11,141 @@ const fetchFn =
 
 const app = express();
 
-// 👇 Allow CORS from your Vite frontend
-app.use(cors({
-  origin: 'http://localhost:3000',
-  methods: ['POST'],
-}));
-
-
 dotenv.config();
 
-console.log("✅ Loaded GEMINI_API_KEY:", !!process.env.GEMINI_API_KEY ? "YES" : "NO");
-
-const PORT = process.env.PORT || 5001;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
-const GEMINI_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-
-const normaliseModel = (model) => {
-  if (!model || typeof model !== 'string') {
-    return null;
-  }
-
-  return model.startsWith('models/') ? model.slice('models/'.length) : model;
-};
-
-const STABLE_MODEL = 'gemini-2.5-flash';
-const ENV_CONFIGURED_MODEL = normaliseModel(process.env.GEMINI_MODEL);
-const DEFAULT_MODEL = ENV_CONFIGURED_MODEL || STABLE_MODEL;
-
-const buildGeminiUrl = (model, apiKey) =>
-  `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
+app.use(
+  cors({
+    origin: 'http://localhost:3000',
+    methods: ['POST'],
+  }),
+);
 
 app.use(express.json());
 
-app.post('/api/gemini', async (req, res) => {
-  const body = req.body || {};
-  const { prompt } = body;
+console.log('✅ Loaded OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'YES' : 'NO');
 
-  if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'Missing Gemini API key.' });
+const PORT = process.env.PORT || 5001;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_BASE_URL = (process.env.OPENAI_API_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+const CHAT_COMPLETIONS_PATH = process.env.OPENAI_CHAT_COMPLETIONS_PATH || '/v1/chat/completions';
+
+const buildCompletionsUrl = () =>
+  `${OPENAI_BASE_URL}${CHAT_COMPLETIONS_PATH.startsWith('/') ? '' : '/'}${CHAT_COMPLETIONS_PATH}`;
+
+const normaliseMessages = (body) => {
+  if (!body || typeof body !== 'object') {
+    return null;
   }
-  if (!prompt && !Array.isArray(body.contents)) {
-    return res.status(400).json({ error: 'Missing prompt text or contents array.' });
+
+  if (Array.isArray(body.messages) && body.messages.length > 0) {
+    return body.messages;
   }
 
-  const requestedModel = normaliseModel(body.model);
-  const primaryModel = requestedModel || DEFAULT_MODEL;
+  if (typeof body.prompt === 'string' && body.prompt.trim()) {
+    return [
+      {
+        role: 'user',
+        content: body.prompt.trim(),
+      },
+    ];
+  }
 
-  const fallbackQueue = [];
-  const enqueueFallback = (candidate) => {
-    if (!candidate) {
-      return;
+  if (Array.isArray(body.contents) && body.contents.length > 0) {
+    const mapped = body.contents
+      .map((entry) => {
+        const parts = Array.isArray(entry?.parts)
+          ? entry.parts.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('\n').trim()
+          : '';
+
+        if (!parts) {
+          return null;
+        }
+
+        return {
+          role: entry?.role || 'user',
+          content: parts,
+        };
+      })
+      .filter(Boolean);
+
+    if (mapped.length > 0) {
+      return mapped;
     }
+  }
 
-    if (candidate === primaryModel) {
-      return;
-    }
+  return null;
+};
 
-    if (fallbackQueue.includes(candidate)) {
-      return;
-    }
+const parseResponseBody = async (response) => {
+  const rawText = await response.text();
+  let parsed = null;
 
-    fallbackQueue.push(candidate);
-  };
-
-  enqueueFallback(DEFAULT_MODEL);
-  enqueueFallback(STABLE_MODEL);
-
-  const {
-    model: _ignoredModel,
-    prompt: _ignoredPrompt,
-    contents: incomingContents,
-    ...restBody
-  } = body;
-
-  const payloadContents =
-    Array.isArray(incomingContents) && incomingContents.length > 0
-      ? incomingContents
-      : [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
-          },
-        ];
-
-  const buildPayloadForModel = (modelName) => ({
-    ...restBody,
-    contents: payloadContents,
-    model: `models/${modelName}`,
-  });
-
-  const fetchAvailableModels = async () => {
+  if (rawText) {
     try {
-      const listRes = await fetchFn(`${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models?key=${GEMINI_API_KEY}`);
-      if (!listRes.ok) {
-        return null;
-      }
-
-      const listJson = await listRes.json();
-      return listJson?.models?.map((item) => item?.name).filter(Boolean) || null;
-    } catch (error) {
-      console.error('[Gemini Proxy] Failed to list models:', error);
-      return null;
-    }
-  };
-
-  const attemptGeminiCall = async (modelName) => {
-    const response = await fetchFn(buildGeminiUrl(modelName, GEMINI_API_KEY), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildPayloadForModel(modelName)),
-    });
-
-    const rawText = await response.text();
-    let parsed;
-    try {
-      parsed = rawText ? JSON.parse(rawText) : null;
+      parsed = JSON.parse(rawText);
     } catch (error) {
       parsed = null;
     }
+  }
 
-    return {
-      response,
-      parsed,
-      rawText,
-      modelName,
-    };
+  return { rawText, parsed };
+};
+
+app.post('/api/openai', async (req, res) => {
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'Missing OpenAI API key.' });
+  }
+
+  const messages = normaliseMessages(req.body || {});
+
+  if (!messages) {
+    return res.status(400).json({ error: 'Request must include prompt, messages, or Gemini-style contents.' });
+  }
+
+  const {
+    model: requestedModel,
+    messages: _ignoredMessages,
+    contents: _ignoredContents,
+    prompt: _ignoredPrompt,
+    ...restBody
+  } = req.body || {};
+
+  const payload = {
+    ...restBody,
+    model: requestedModel || OPENAI_MODEL,
+    messages,
   };
 
   try {
-    const attempts = [];
-    const modelsToTry = [primaryModel, ...fallbackQueue];
-    let successfulAttempt = null;
+    const response = await fetchFn(buildCompletionsUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-    for (const modelName of modelsToTry) {
-      const attempt = await attemptGeminiCall(modelName);
-      attempts.push(attempt);
+    const { parsed, rawText } = await parseResponseBody(response);
 
-      if (attempt.response.ok) {
-        successfulAttempt = attempt;
-        break;
-      }
+    if (!response.ok) {
+      const errorMessage =
+        parsed?.error?.message || parsed?.error || rawText || `OpenAI API Error (HTTP ${response.status}).`;
 
-      if (attempt.response.status !== 404) {
-        break;
-      }
-    }
-
-    const attemptedModels = attempts.map((attempt) => attempt.modelName);
-
-    if (successfulAttempt) {
-      const modelUsed = successfulAttempt.modelName;
-      const firstAttemptModel = attempts[0]?.modelName;
-
-      res.set('x-gemini-model-used', modelUsed);
-      if (firstAttemptModel && firstAttemptModel !== modelUsed) {
-        res.set('x-gemini-model-fallback', firstAttemptModel);
-      }
-
-      const suggestion =
-        successfulAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
-      return res.status(200).json({ suggestion });
-    }
-
-    const lastAttempt = attempts[attempts.length - 1];
-
-    if (!lastAttempt) {
-      throw new Error('Gemini proxy failed before attempting any models.');
-    }
-
-    if (lastAttempt.response.status === 404) {
-      const availableModels = await fetchAvailableModels();
-      const unavailableMessage = `Model(s) ${attemptedModels
-        .map((name) => `"${name}"`)
-        .join(', ')} are not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
-
-      return res.status(404).json({
-        error: unavailableMessage,
-        availableModels,
-        attemptedModels,
-        recommendedModel: `models/${STABLE_MODEL}`,
-        envModel: ENV_CONFIGURED_MODEL ? `models/${ENV_CONFIGURED_MODEL}` : null,
-        rawError: lastAttempt.parsed || lastAttempt.rawText || null,
+      return res.status(response.status).json({
+        error: errorMessage,
+        rawError: parsed || rawText || null,
       });
     }
 
-    return res.status(lastAttempt.response.status).json({
-      error:
-        lastAttempt.parsed?.error?.message ||
-        lastAttempt.parsed?.error ||
-        lastAttempt.rawText ||
-        `Gemini API Error (HTTP ${lastAttempt.response.status}).`,
-      attemptedModels,
-    });
+    return res.status(200).json(parsed || {});
   } catch (err) {
-    console.error('[Gemini Proxy Error]', err);
+    console.error('[OpenAI Proxy Error]', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🔄 Gemini proxy running at http://localhost:${PORT}`);
+  console.log(`🔄 OpenAI proxy running at http://localhost:${PORT}`);
 });

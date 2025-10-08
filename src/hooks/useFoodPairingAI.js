@@ -1,108 +1,41 @@
 import { useState } from 'react';
 
-const DEFAULT_RECOMMENDED_MODEL = 'models/gemini-2.5-flash';
+const DEFAULT_ERROR_MESSAGE = (status) => `OpenAI request failed with status ${status}.`;
 
-const formatModelName = (model) => {
-  if (!model || typeof model !== 'string') {
-    return null;
+const parseJsonSafely = async (response) => {
+  const text = await response.text();
+  if (!text) {
+    return { parsed: null, rawText: '' };
   }
 
-  return model.startsWith('models/') ? model : `models/${model}`;
+  try {
+    return { parsed: JSON.parse(text), rawText: text };
+  } catch (error) {
+    return { parsed: null, rawText: text };
+  }
 };
 
-const pickRecommendedModel = (availableModels, explicitRecommendation) => {
-  const formattedRecommendation = formatModelName(explicitRecommendation);
-  if (formattedRecommendation) {
-    return formattedRecommendation;
-  }
-
-  if (!Array.isArray(availableModels) || availableModels.length === 0) {
-    return DEFAULT_RECOMMENDED_MODEL;
-  }
-
-  const formatted = availableModels.map(formatModelName).filter(Boolean);
-  if (formatted.length === 0) {
-    return DEFAULT_RECOMMENDED_MODEL;
-  }
-
-  const preferred = formatted.find((name) => name.endsWith('gemini-2.5-flash'));
-  return preferred || formatted[0];
-};
-
-const parseGeminiResponse = async (response) => {
-  const rawText = await response.text();
-  let parsed = null;
-
-  if (rawText) {
-    try {
-      parsed = JSON.parse(rawText);
-    } catch (err) {
-      parsed = null;
-    }
-  }
-
-  return { parsed, rawText };
-};
-
-const buildGeminiError = (response, parsed, rawText) => {
-  let message =
+const buildOpenAIError = (response, parsed, rawText) => {
+  const message =
     (typeof parsed?.error === 'string' && parsed.error) ||
     parsed?.error?.message ||
     rawText ||
-    `Gemini request failed with status ${response.status}.`;
-
-  const details = [];
-
-  const attemptedModels = Array.isArray(parsed?.attemptedModels)
-    ? parsed.attemptedModels.map(formatModelName).filter(Boolean)
-    : [];
-
-  if (attemptedModels.length > 0) {
-    details.push(`Attempted models: ${attemptedModels.join(', ')}.`);
-  }
-
-  if (response.status === 404) {
-    const recommendedModel = pickRecommendedModel(parsed?.availableModels, parsed?.recommendedModel);
-    if (recommendedModel) {
-      details.push(
-        `Recommended model: "${recommendedModel}". Update your GEMINI_MODEL environment variable to this value and redeploy.`
-      );
-    }
-
-    const formattedEnvModel = formatModelName(parsed?.envModel);
-    if (formattedEnvModel) {
-      details.push(`Your deployment is currently configured to use "${formattedEnvModel}".`);
-    }
-
-    if (Array.isArray(parsed?.availableModels) && parsed.availableModels.length > 0) {
-      const availableFormatted = parsed.availableModels
-        .map(formatModelName)
-        .filter(Boolean)
-        .join(', ');
-      if (availableFormatted) {
-        details.push(`Available models: ${availableFormatted}.`);
-      }
-    }
-  }
-
-  if (details.length > 0) {
-    message = `${message} ${details.join(' ')}`.trim();
-  }
+    DEFAULT_ERROR_MESSAGE(response.status);
 
   return message;
 };
 
-const sendGeminiRequest = async (payload) => {
-  const response = await fetch('/api/gemini', {
+const sendOpenAIRequest = async (payload) => {
+  const response = await fetch('/api/openai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
-  const { parsed, rawText } = await parseGeminiResponse(response);
+  const { parsed, rawText } = await parseJsonSafely(response);
 
   if (!response.ok) {
-    throw new Error(buildGeminiError(response, parsed, rawText));
+    throw new Error(buildOpenAIError(response, parsed, rawText));
   }
 
   return parsed;
@@ -112,6 +45,13 @@ export const useFoodPairingAI = (setError) => {
   const [foodPairingSuggestion, setFoodPairingSuggestion] = useState(null);
   const [isLoadingPairing, setIsLoadingPairing] = useState(false);
   const [pairingError, setPairingError] = useState(null);
+
+  const handleError = (message) => {
+    setPairingError(message);
+    if (typeof setError === 'function') {
+      setError(message, 'error');
+    }
+  };
 
   const fetchFoodPairing = async (wine) => {
     if (!wine) {
@@ -128,15 +68,16 @@ export const useFoodPairingAI = (setError) => {
     const prompt = `Suggest a specific food pairing for the following wine: ${wineDescription}. Provide a concise suggestion (1-2 sentences).`;
 
     try {
-      const data = await sendGeminiRequest({
-        contents: [
+      const data = await sendOpenAIRequest({
+        messages: [
           {
             role: 'user',
-            parts: [{ text: prompt }],
+            content: prompt,
           },
         ],
       });
-      const suggestion = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      const suggestion = data?.choices?.[0]?.message?.content?.trim();
       if (suggestion) {
         setFoodPairingSuggestion(suggestion);
       } else {
@@ -145,10 +86,7 @@ export const useFoodPairingAI = (setError) => {
     } catch (err) {
       console.error('Error fetching food pairing:', err);
       const message = `Food pairing suggestion failed: ${err.message}`;
-      setPairingError(message);
-      if (typeof setError === 'function') {
-        setError(message, 'error');
-      }
+      handleError(message);
     } finally {
       setIsLoadingPairing(false);
     }
@@ -178,15 +116,16 @@ export const useFoodPairingAI = (setError) => {
     const prompt = `I want to eat "${foodItem}". From the following list of wines in my cellar, which one would be the BEST match? Also, list up to two other good alternatives if any. For each suggested wine, briefly explain your choice. If no wines are a good match, please state that.\nMy wines are:\n${wineListText}`;
 
     try {
-      const data = await sendGeminiRequest({
-        contents: [
+      const data = await sendOpenAIRequest({
+        messages: [
           {
             role: 'user',
-            parts: [{ text: prompt }],
+            content: prompt,
           },
         ],
       });
-      const suggestion = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      const suggestion = data?.choices?.[0]?.message?.content?.trim();
       if (suggestion) {
         setFoodPairingSuggestion(suggestion);
       } else {
@@ -195,10 +134,7 @@ export const useFoodPairingAI = (setError) => {
     } catch (err) {
       console.error('Error finding wine for food:', err);
       const message = `Finding wine for food failed: ${err.message}`;
-      setPairingError(message);
-      if (typeof setError === 'function') {
-        setError(message, 'error');
-      }
+      handleError(message);
     } finally {
       setIsLoadingPairing(false);
     }
@@ -214,4 +150,3 @@ export const useFoodPairingAI = (setError) => {
     setPairingError,
   };
 };
-

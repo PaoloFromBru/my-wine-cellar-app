@@ -2,19 +2,17 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
-## Gemini configuration & troubleshooting
+## OpenAI configuration & troubleshooting
 
-The AI pairing features depend on Google AI Studio's Gemini API.
+The AI pairing features depend on OpenAI's Chat Completions API.
 
-1. Set the required environment variable `GEMINI_API_KEY` in both the frontend (Next.js API route) and in the optional Express proxy (`server.js`).
+1. Set the required environment variable `OPENAI_API_KEY` in both the frontend (serverless API route) and in the optional Express proxy (`server.js`).
 2. (Optional) Override the defaults via:
-   - `GEMINI_MODEL` (defaults to `models/gemini-2.5-flash`)
-   - `GEMINI_API_VERSION` (defaults to `v1beta`)
-   - `GEMINI_API_BASE_URL` (defaults to `https://generativelanguage.googleapis.com`)
+   - `OPENAI_MODEL` (defaults to `gpt-4o-mini`)
+   - `OPENAI_API_BASE_URL` (defaults to `https://api.openai.com`)
+   - `OPENAI_CHAT_COMPLETIONS_PATH` (defaults to `/v1/chat/completions`)
 
-If a request references a retired model, the proxy will transparently retry with the default `models/gemini-2.5-flash` model and include `x-gemini-model-used` (plus `x-gemini-model-fallback` when applicable) headers so you can confirm which model ultimately served the response.
-
-When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field alongside the `attemptedModels` that failed. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
+If you encounter errors, inspect the JSON response returned by the proxy for additional context from the OpenAI API. The proxy also accepts legacy Gemini-style `contents` payloads and converts them to Chat Completions `messages` to ease migration.
 
 
 ## Available Scripts
