@@ -35,7 +35,9 @@ const normaliseModel = (model) => {
   return model.startsWith('models/') ? model.slice('models/'.length) : model;
 };
 
-const DEFAULT_MODEL = normaliseModel(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
+const STABLE_MODEL = 'gemini-2.5-flash';
+const ENV_CONFIGURED_MODEL = normaliseModel(process.env.GEMINI_MODEL);
+const DEFAULT_MODEL = ENV_CONFIGURED_MODEL || STABLE_MODEL;
 
 const buildGeminiUrl = (model, apiKey) =>
   `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${apiKey}`;
@@ -54,7 +56,27 @@ app.post('/api/gemini', async (req, res) => {
   }
 
   const requestedModel = normaliseModel(body.model);
-  const model = requestedModel || DEFAULT_MODEL;
+  const primaryModel = requestedModel || DEFAULT_MODEL;
+
+  const fallbackQueue = [];
+  const enqueueFallback = (candidate) => {
+    if (!candidate) {
+      return;
+    }
+
+    if (candidate === primaryModel) {
+      return;
+    }
+
+    if (fallbackQueue.includes(candidate)) {
+      return;
+    }
+
+    fallbackQueue.push(candidate);
+  };
+
+  enqueueFallback(DEFAULT_MODEL);
+  enqueueFallback(STABLE_MODEL);
 
   const {
     model: _ignoredModel,
@@ -118,69 +140,68 @@ app.post('/api/gemini', async (req, res) => {
   };
 
   try {
-    const primaryAttempt = await attemptGeminiCall(model);
+    const attempts = [];
+    const modelsToTry = [primaryModel, ...fallbackQueue];
+    let successfulAttempt = null;
 
-    if (primaryAttempt.response.ok) {
-      res.set('x-gemini-model-used', primaryAttempt.modelName);
+    for (const modelName of modelsToTry) {
+      const attempt = await attemptGeminiCall(modelName);
+      attempts.push(attempt);
+
+      if (attempt.response.ok) {
+        successfulAttempt = attempt;
+        break;
+      }
+
+      if (attempt.response.status !== 404) {
+        break;
+      }
+    }
+
+    const attemptedModels = attempts.map((attempt) => attempt.modelName);
+
+    if (successfulAttempt) {
+      const modelUsed = successfulAttempt.modelName;
+      const firstAttemptModel = attempts[0]?.modelName;
+
+      res.set('x-gemini-model-used', modelUsed);
+      if (firstAttemptModel && firstAttemptModel !== modelUsed) {
+        res.set('x-gemini-model-fallback', firstAttemptModel);
+      }
+
       const suggestion =
-        primaryAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
+        successfulAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
       return res.status(200).json({ suggestion });
     }
 
-    const attemptedModels = [primaryAttempt.modelName];
+    const lastAttempt = attempts[attempts.length - 1];
 
-    if (primaryAttempt.response.status === 404 && primaryAttempt.modelName !== DEFAULT_MODEL) {
-      const fallbackAttempt = await attemptGeminiCall(DEFAULT_MODEL);
-      attemptedModels.push(DEFAULT_MODEL);
-
-      if (fallbackAttempt.response.ok) {
-        res.set('x-gemini-model-used', fallbackAttempt.modelName);
-        res.set('x-gemini-model-fallback', primaryAttempt.modelName);
-        const suggestion =
-          fallbackAttempt.parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion received.';
-        return res.status(200).json({ suggestion });
-      }
-
-      if (fallbackAttempt.response.status === 404) {
-        const availableModels = await fetchAvailableModels();
-        const unavailableMessage = `Model(s) ${attemptedModels
-          .map((name) => `"${name}"`)
-          .join(', ')} are not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
-        return res.status(404).json({
-          error: unavailableMessage,
-          availableModels,
-          attemptedModels,
-          rawError: fallbackAttempt.parsed || fallbackAttempt.rawText || null,
-        });
-      }
-
-      return res.status(fallbackAttempt.response.status).json({
-        error:
-          fallbackAttempt.parsed?.error?.message ||
-          fallbackAttempt.parsed?.error ||
-          fallbackAttempt.rawText ||
-          `Gemini API Error (HTTP ${fallbackAttempt.response.status}).`,
-        attemptedModels,
-      });
+    if (!lastAttempt) {
+      throw new Error('Gemini proxy failed before attempting any models.');
     }
 
-    if (primaryAttempt.response.status === 404) {
+    if (lastAttempt.response.status === 404) {
       const availableModels = await fetchAvailableModels();
-      const notFoundMessage = `Model "${primaryAttempt.modelName}" is not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
+      const unavailableMessage = `Model(s) ${attemptedModels
+        .map((name) => `"${name}"`)
+        .join(', ')} are not available for API version "${GEMINI_API_VERSION}" at ${GEMINI_BASE_URL}.`;
+
       return res.status(404).json({
-        error: notFoundMessage,
+        error: unavailableMessage,
         availableModels,
         attemptedModels,
-        rawError: primaryAttempt.parsed || primaryAttempt.rawText || null,
+        recommendedModel: `models/${STABLE_MODEL}`,
+        envModel: ENV_CONFIGURED_MODEL ? `models/${ENV_CONFIGURED_MODEL}` : null,
+        rawError: lastAttempt.parsed || lastAttempt.rawText || null,
       });
     }
 
-    return res.status(primaryAttempt.response.status).json({
+    return res.status(lastAttempt.response.status).json({
       error:
-        primaryAttempt.parsed?.error?.message ||
-        primaryAttempt.parsed?.error ||
-        primaryAttempt.rawText ||
-        `Gemini API Error (HTTP ${primaryAttempt.response.status}).`,
+        lastAttempt.parsed?.error?.message ||
+        lastAttempt.parsed?.error ||
+        lastAttempt.rawText ||
+        `Gemini API Error (HTTP ${lastAttempt.response.status}).`,
       attemptedModels,
     });
   } catch (err) {

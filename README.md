@@ -16,6 +16,7 @@ If a request references a retired model, the proxy will transparently retry with
 
 When the Gemini API responds with `404 NOT_FOUND`, the proxy automatically asks Google for the list of available models and returns them in the `availableModels` field alongside the `attemptedModels` that failed. Use that response to pick a supported model/version combination and update your `.env` settings accordingly.
 
+
 ## Available Scripts
 
 In the project directory, you can run:

@@ -10,7 +10,12 @@ const formatModelName = (model) => {
   return model.startsWith('models/') ? model : `models/${model}`;
 };
 
-const pickRecommendedModel = (availableModels) => {
+const pickRecommendedModel = (availableModels, explicitRecommendation) => {
+  const formattedRecommendation = formatModelName(explicitRecommendation);
+  if (formattedRecommendation) {
+    return formattedRecommendation;
+  }
+
   if (!Array.isArray(availableModels) || availableModels.length === 0) {
     return DEFAULT_RECOMMENDED_MODEL;
   }
@@ -57,11 +62,16 @@ const buildGeminiError = (response, parsed, rawText) => {
   }
 
   if (response.status === 404) {
-    const recommendedModel = pickRecommendedModel(parsed?.availableModels);
+    const recommendedModel = pickRecommendedModel(parsed?.availableModels, parsed?.recommendedModel);
     if (recommendedModel) {
       details.push(
         `Recommended model: "${recommendedModel}". Update your GEMINI_MODEL environment variable to this value and redeploy.`
       );
+    }
+
+    const formattedEnvModel = formatModelName(parsed?.envModel);
+    if (formattedEnvModel) {
+      details.push(`Your deployment is currently configured to use "${formattedEnvModel}".`);
     }
 
     if (Array.isArray(parsed?.availableModels) && parsed.availableModels.length > 0) {
