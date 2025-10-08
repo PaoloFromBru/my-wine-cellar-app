@@ -10,7 +10,7 @@ const FoodIcon = ({ className = "w-5 h-5" }) => (
 );
 
 
-const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetchPairing }) => {
+const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetchPairing, errorMessage }) => {
     useEffect(() => {
         if (isOpen && wine && !suggestion && !isLoading) {
             onFetchPairing();
@@ -33,6 +33,9 @@ const FoodPairingModal = ({ isOpen, onClose, wine, suggestion, isLoading, onFetc
                     </svg>
                     <span>Finding the perfect pairing...</span>
                 </div>
+            )}
+            {!isLoading && errorMessage && (
+                <AlertMessage message={errorMessage} type="error" />
             )}
             {!isLoading && suggestion && (
                 <div className="p-3 bg-green-50 dark:bg-green-800/50 rounded-md border border-green-200 dark:border-green-700">

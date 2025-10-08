@@ -1,5 +1,6 @@
 import React from 'react';
 import Modal from './Modal.js'; // Import Modal
+import AlertMessage from './AlertMessage.js';
 
 // --- Icons (local for this component for now) ---
 const SparklesIcon = ({ className = "w-5 h-5" }) => (
@@ -8,7 +9,7 @@ const SparklesIcon = ({ className = "w-5 h-5" }) => (
     </svg>
 );
 
-const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading }) => {
+const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoading, errorMessage }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Wine Suggestion for ${foodItem || 'Your Meal'}`}>
             {isLoading && (
@@ -19,6 +20,9 @@ const ReverseFoodPairingModal = ({ isOpen, onClose, foodItem, suggestion, isLoad
                     </svg>
                     <span>Searching your cellar for the best match...</span>
                 </div>
+            )}
+            {!isLoading && errorMessage && (
+                <AlertMessage message={errorMessage} type="error" />
             )}
             {!isLoading && suggestion && (
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-md border border-blue-200 dark:border-blue-700">
