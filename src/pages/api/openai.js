@@ -2,6 +2,28 @@ const API_BASE_URL = (process.env.OPENAI_API_BASE_URL || 'https://api.openai.com
 const CHAT_COMPLETIONS_PATH = process.env.OPENAI_CHAT_COMPLETIONS_PATH || '/v1/chat/completions';
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
+const shouldIgnoreRequestedModel = (model) => {
+  if (typeof model !== 'string') {
+    return true;
+  }
+
+  const trimmed = model.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  return /^models\//.test(trimmed) || trimmed.includes(':');
+};
+
+const resolveModel = (requestedModel) => {
+  if (!shouldIgnoreRequestedModel(requestedModel)) {
+    return requestedModel.trim();
+  }
+
+  return DEFAULT_MODEL;
+};
+
 const normaliseMessages = (requestBody) => {
   if (!requestBody || typeof requestBody !== 'object') {
     return null;
@@ -87,7 +109,7 @@ export default async function handler(req, res) {
 
   const payload = {
     ...rest,
-    model: requestedModel || DEFAULT_MODEL,
+    model: resolveModel(requestedModel),
     messages,
   };
 
